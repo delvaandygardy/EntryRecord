@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Enregistrement Auto",
+    "slug": "enregistrement-auto",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": { "backgroundColor": "#0f1117" },
+    "android": { "adaptiveIcon": { "backgroundColor": "#0f1117" } },
+    "ios": { "supportsTablet": true }
+  }
+}

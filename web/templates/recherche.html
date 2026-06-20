@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Recherche{% endblock %}
+{% block content %}
+<div class="topbar"><h1><i class="bi bi-search me-2"></i>Recherche Globale</h1></div>
+
+<form method="get" class="mb-4">
+  <div class="input-group input-group-lg" style="max-width:600px">
+    <input name="q" value="{{ q }}" class="form-control"
+           placeholder="Plaque, nom, numéro de document…" autofocus>
+    <button class="btn btn-primary"><i class="bi bi-search"></i> Rechercher</button>
+  </div>
+</form>
+
+{% if q %}
+  <!-- Véhicules -->
+  {% if results.get('vehicules') %}
+  <h5 class="text-primary mt-4">
+    <i class="bi bi-car-front me-2"></i>Véhicules ({{ results.vehicules|length }})
+  </h5>
+  <div class="card bg-dark border-secondary mb-3">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Plaque</th><th>Confiance</th><th>Entrée</th><th>Date/Heure</th></tr></thead>
+      <tbody>
+      {% for v in results.vehicules %}
+        <tr>
+          <td><span class="badge bg-primary">{{ v.plaque }}</span></td>
+          <td>{{ "%.0f%%"|format((v.confidence or 0)*100) }}</td>
+          <td>{{ v.point_entree }}</td>
+          <td class="text-muted">{{ v.timestamp }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Conducteurs -->
+  {% if results.get('conducteurs') %}
+  <h5 class="text-success mt-4">
+    <i class="bi bi-person-badge me-2"></i>Conducteurs ({{ results.conducteurs|length }})
+  </h5>
+  <div class="card bg-dark border-secondary mb-3">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Nom</th><th>N° Document</th><th>Type</th><th>Entrée</th><th>Date/Heure</th></tr></thead>
+      <tbody>
+      {% for c in results.conducteurs %}
+        <tr>
+          <td>{{ c.prenom or '' }} {{ c.nom or '—' }}</td>
+          <td><code>{{ c.numero_document or '—' }}</code></td>
+          <td>{{ c.type_document or '—' }}</td>
+          <td>{{ c.point_entree }}</td>
+          <td class="text-muted">{{ c.timestamp }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Piétons -->
+  {% if results.get('pietons') %}
+  <h5 class="text-warning mt-4">
+    <i class="bi bi-people me-2"></i>Piétons ({{ results.pietons|length }})
+  </h5>
+  <div class="card bg-dark border-secondary mb-3">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Nom</th><th>N° Document</th><th>Nationalité</th><th>Entrée</th><th>Date/Heure</th></tr></thead>
+      <tbody>
+      {% for p in results.pietons %}
+        <tr>
+          <td>{{ p.prenom or '' }} {{ p.nom or '—' }}</td>
+          <td><code>{{ p.numero_document or '—' }}</code></td>
+          <td>{{ p.nationalite or '—' }}</td>
+          <td>{{ p.point_entree }}</td>
+          <td class="text-muted">{{ p.timestamp }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Employés -->
+  {% if emp_results %}
+  <h5 class="text-info mt-4">
+    <i class="bi bi-briefcase me-2"></i>Employés ({{ emp_results|length }})
+  </h5>
+  <div class="card bg-dark border-secondary mb-3">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Matricule</th><th>Nom</th><th>Poste</th><th>Département</th><th>Statut</th></tr></thead>
+      <tbody>
+      {% for e in emp_results %}
+        <tr>
+          <td><code>{{ e.matricule }}</code></td>
+          <td>{{ e.prenom }} {{ e.nom }}</td>
+          <td>{{ e.poste or '—' }}</td>
+          <td>{{ e.departement or '—' }}</td>
+          <td><span class="badge rounded-pill {% if e.statut=='Actif' %}badge-actif{% else %}badge-inactif{% endif %}">
+            {{ e.statut }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if not results.get('vehicules') and not results.get('conducteurs') and not results.get('pietons') and not emp_results %}
+    <div class="alert alert-secondary mt-3">Aucun résultat pour « {{ q }} »</div>
+  {% endif %}
+{% endif %}
+{% endblock %}

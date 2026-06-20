@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Employés{% endblock %}
+{% block content %}
+
+<div class="topbar d-flex align-items-center justify-content-between">
+  <h1><i class="bi bi-briefcase-fill me-2"></i>Employés</h1>
+  <div class="d-flex gap-2">
+    <a href="/employes/ajouter" class="btn btn-success btn-sm">
+      <i class="bi bi-plus-lg"></i> Ajouter
+    </a>
+    <a href="/export/employes" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-download"></i> CSV
+    </a>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card bg-dark border-secondary mb-3 p-3">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-auto">
+      <input name="q" value="{{ q }}" class="form-control form-control-sm"
+             placeholder="Rechercher nom, matricule, poste…" style="width:280px">
+    </div>
+    <div class="col-auto">
+      <select name="statut" class="form-select form-select-sm" style="width:130px">
+        <option {% if statut=='Tous' %}selected{% endif %}>Tous</option>
+        <option {% if statut=='Actif' %}selected{% endif %}>Actif</option>
+        <option {% if statut=='Inactif' %}selected{% endif %}>Inactif</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Filtrer</button>
+      <a href="/employes" class="btn btn-outline-secondary btn-sm">Réinitialiser</a>
+    </div>
+  </form>
+</div>
+
+<div class="card bg-dark border-secondary">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover dt-table mb-0">
+        <thead>
+          <tr>
+            <th>ID</th><th>Matricule</th><th>Nom</th><th>Prénom</th>
+            <th>Poste</th><th>Département</th><th>Téléphone</th>
+            <th>Date Embauche</th><th>Statut</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for emp in rows %}
+          <tr {% if emp.statut == 'Inactif' %}class="text-muted"{% endif %}>
+            <td>{{ emp.id }}</td>
+            <td><code>{{ emp.matricule }}</code></td>
+            <td>{{ emp.nom }}</td>
+            <td>{{ emp.prenom }}</td>
+            <td>{{ emp.poste or '—' }}</td>
+            <td>{{ emp.departement or '—' }}</td>
+            <td>{{ emp.telephone or '—' }}</td>
+            <td>{{ emp.date_embauche or '—' }}</td>
+            <td>
+              <span class="badge rounded-pill
+                {% if emp.statut == 'Actif' %}badge-actif{% else %}badge-inactif{% endif %}">
+                {{ emp.statut }}
+              </span>
+            </td>
+            <td class="d-flex gap-1">
+              <a href="/employes/{{ emp.id }}/modifier" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="post" action="/employes/{{ emp.id }}/supprimer"
+                    onsubmit="return confirm('Supprimer {{ emp.prenom }} {{ emp.nom }} ?')">
+                <button class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="10" class="text-center text-muted py-4">Aucun employé trouvé</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

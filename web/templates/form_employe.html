@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+
+<div class="topbar">
+  <h1><i class="bi bi-briefcase me-2"></i>{{ title }}</h1>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card bg-dark border-secondary">
+      <div class="card-body p-4">
+        <form method="post">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Matricule <span class="text-danger">*</span></label>
+              <input name="matricule" value="{{ emp.get('matricule','') }}"
+                     class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Statut</label>
+              <select name="statut" class="form-select">
+                <option {% if emp.get('statut','Actif')=='Actif' %}selected{% endif %}>Actif</option>
+                <option {% if emp.get('statut')=='Inactif' %}selected{% endif %}>Inactif</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Nom <span class="text-danger">*</span></label>
+              <input name="nom" value="{{ emp.get('nom','') }}" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Prénom <span class="text-danger">*</span></label>
+              <input name="prenom" value="{{ emp.get('prenom','') }}" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Poste</label>
+              <input name="poste" value="{{ emp.get('poste','') }}" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Département</label>
+              <input name="departement" value="{{ emp.get('departement','') }}" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Téléphone</label>
+              <input name="telephone" value="{{ emp.get('telephone','') }}" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Email</label>
+              <input name="email" type="email" value="{{ emp.get('email','') }}" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Date d'embauche</label>
+              <input name="date_embauche" value="{{ emp.get('date_embauche','') }}"
+                     class="form-control" placeholder="jj/mm/aaaa">
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-success px-4">
+              <i class="bi bi-check-lg"></i> Enregistrer
+            </button>
+            <a href="/employes" class="btn btn-outline-secondary px-4">Annuler</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

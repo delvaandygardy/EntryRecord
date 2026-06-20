@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+
+<div class="topbar d-flex align-items-center justify-content-between">
+  <h1>{{ title }}</h1>
+  <div class="d-flex gap-2">
+    {% if add_url %}
+    <a href="{{ add_url }}" class="btn btn-success btn-sm">
+      <i class="bi bi-plus-lg"></i> Ajouter
+    </a>
+    {% endif %}
+    {% if export_url %}
+    <a href="{{ export_url }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-download"></i> CSV
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card bg-dark border-secondary">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover dt-table mb-0">
+        <thead>
+          <tr>
+            {% for lbl in labels %}<th>{{ lbl }}</th>{% endfor %}
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for row in rows %}
+          <tr>
+            {% for col in cols %}
+              <td>
+                {% if col == 'plaque' %}
+                  <span class="badge bg-primary">{{ row[col] }}</span>
+                {% elif col == 'confidence' %}
+                  {{ "%.0f%%"|format((row[col] or 0)*100) }}
+                {% else %}
+                  {{ row[col] or '—' }}
+                {% endif %}
+              </td>
+            {% endfor %}
+            <td>
+              <form method="post" action="/supprimer/{{ request.path.lstrip('/').split('/')[0] }}/{{ row.id }}"
+                    onsubmit="return confirm('Supprimer cet enregistrement ?')" style="display:inline">
+                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3"></i></button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="{{ cols|length + 1 }}" class="text-center text-muted py-4">Aucun enregistrement</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

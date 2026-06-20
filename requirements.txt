@@ -1,0 +1,33 @@
+# Web & API
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+httpx>=0.27.0
+
+# Auth
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# Base de données
+psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.30
+alembic>=1.13.0
+
+# ANPR local (fallback Platerecognizer)
+# torch CPU-only pré-installé via Dockerfile (évite CUDA ~2GB)
+opencv-python-headless>=4.8.0
+easyocr>=1.7.0
+numpy>=1.24.0
+
+# Scanner codes-barres / QR
+pyzbar>=0.1.9
+
+# Images & rapports
+Pillow>=10.0.0
+reportlab>=4.0.0
+openpyxl>=3.1.2
+qrcode>=7.4.2
+
+# Utilitaires
+python-dotenv>=1.0.0
+python-dateutil>=2.8.2

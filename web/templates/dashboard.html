@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Tableau de Bord{% endblock %}
+{% block content %}
+
+<div class="topbar d-flex align-items-center justify-content-between">
+  <h1><i class="bi bi-grid-1x2-fill me-2 text-primary"></i>Tableau de Bord</h1>
+  <button class="btn btn-sm btn-outline-secondary" onclick="refreshStats()">
+    <i class="bi bi-arrow-clockwise"></i> Actualiser
+  </button>
+</div>
+
+<!-- Stat cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="stat-card" style="background:#1a3a6b;">
+      <div class="num" id="s-veh-today">{{ stats.vehicules_today }}</div>
+      <div class="lbl">Véhicules aujourd'hui</div>
+      <i class="bi bi-car-front-fill icon-bg"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card" style="background:#1a4a2e;">
+      <div class="num" id="s-cond-today">{{ stats.conducteurs_today }}</div>
+      <div class="lbl">Conducteurs aujourd'hui</div>
+      <i class="bi bi-person-badge-fill icon-bg"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card" style="background:#4a3a0a;">
+      <div class="num" id="s-piet-today">{{ stats.pietons_today }}</div>
+      <div class="lbl">Piétons aujourd'hui</div>
+      <i class="bi bi-people-fill icon-bg"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card" style="background:#3a1a1a;">
+      <div class="num" id="s-veh-total">{{ stats.vehicules_total }}</div>
+      <div class="lbl">Total véhicules</div>
+      <i class="bi bi-database-fill icon-bg"></i>
+    </div>
+  </div>
+</div>
+
+<!-- Second row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="stat-card" style="background:#1e1e3a;">
+      <div class="num" id="s-cond-total">{{ stats.conducteurs_total }}</div>
+      <div class="lbl">Total conducteurs</div>
+      <i class="bi bi-person-badge icon-bg"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card" style="background:#1a2e2e;">
+      <div class="num" id="s-piet-total">{{ stats.pietons_total }}</div>
+      <div class="lbl">Total piétons</div>
+      <i class="bi bi-people icon-bg"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card" style="background:#2a1a3a;">
+      <div class="num">{{ stats.get('employes_total', 0) }}</div>
+      <div class="lbl">Total employés</div>
+      <i class="bi bi-briefcase-fill icon-bg"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <a href="/vehicules/ajouter" class="stat-card d-block text-decoration-none"
+       style="background:#1a3a2a; cursor:pointer;">
+      <div class="num" style="font-size:1.6rem;">+ Ajouter</div>
+      <div class="lbl">Enregistrement rapide</div>
+      <i class="bi bi-plus-circle-fill icon-bg"></i>
+    </a>
+  </div>
+</div>
+
+<!-- Recent activity tables -->
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card bg-dark border-secondary">
+      <div class="card-header d-flex justify-content-between align-items-center border-secondary">
+        <span><i class="bi bi-car-front me-2 text-primary"></i>Derniers Véhicules</span>
+        <a href="/vehicules" class="btn btn-sm btn-outline-primary">Voir tout</a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Plaque</th><th>Confiance</th><th>Entrée</th><th>Heure</th></tr></thead>
+          <tbody>
+          {% for v in recent.vehicules %}
+            <tr>
+              <td><span class="badge bg-primary">{{ v.plaque }}</span></td>
+              <td>{{ "%.0f%%"|format((v.confidence or 0)*100) }}</td>
+              <td>{{ v.point_entree }}</td>
+              <td class="text-muted" style="font-size:.8rem;">{{ v.timestamp }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4" class="text-center text-muted py-3">Aucun enregistrement</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card bg-dark border-secondary">
+      <div class="card-header d-flex justify-content-between align-items-center border-secondary">
+        <span><i class="bi bi-people me-2 text-warning"></i>Derniers Piétons & Conducteurs</span>
+        <a href="/pietons" class="btn btn-sm btn-outline-warning">Voir tout</a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Nom</th><th>Type Doc.</th><th>Catégorie</th><th>Heure</th></tr></thead>
+          <tbody>
+          {% for p in recent.pietons %}
+            <tr>
+              <td>{{ p.prenom or '' }} {{ p.nom or p.numero_document or '—' }}</td>
+              <td>{{ p.type_document }}</td>
+              <td><span class="badge bg-warning text-dark">Piéton</span></td>
+              <td class="text-muted" style="font-size:.8rem;">{{ p.timestamp }}</td>
+            </tr>
+          {% endfor %}
+          {% for c in recent.conducteurs %}
+            <tr>
+              <td>{{ c.prenom or '' }} {{ c.nom or c.numero_document or '—' }}</td>
+              <td>{{ c.type_document }}</td>
+              <td><span class="badge bg-success">Conducteur</span></td>
+              <td class="text-muted" style="font-size:.8rem;">{{ c.timestamp }}</td>
+            </tr>
+          {% endfor %}
+          {% if not recent.pietons and not recent.conducteurs %}
+            <tr><td colspan="4" class="text-center text-muted py-3">Aucun enregistrement</td></tr>
+          {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function refreshStats() {
+  fetch('/api/stats').then(r => r.json()).then(s => {
+    document.getElementById('s-veh-today').textContent   = s.vehicules_today;
+    document.getElementById('s-cond-today').textContent  = s.conducteurs_today;
+    document.getElementById('s-piet-today').textContent  = s.pietons_today;
+    document.getElementById('s-veh-total').textContent   = s.vehicules_total;
+    document.getElementById('s-cond-total').textContent  = s.conducteurs_total;
+    document.getElementById('s-piet-total').textContent  = s.pietons_total;
+  });
+}
+setInterval(refreshStats, 10000);
+</script>
+{% endblock %}

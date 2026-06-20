@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="topbar"><h1><i class="bi bi-person-plus me-2"></i>{{ title }}</h1></div>
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card bg-dark border-secondary">
+      <div class="card-body p-4">
+        <form method="post">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Nom</label>
+              <input name="nom" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Prénom</label>
+              <input name="prenom" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">N° Document</label>
+              <input name="numero_document" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Type de document</label>
+              <select name="type_document" class="form-select">
+                <option value="{{ type_doc_default }}" selected>{{ type_doc_default }}</option>
+                <option value="CNI">CNI</option>
+                <option value="PASSEPORT">Passeport</option>
+                <option value="PERMIS">Permis de conduire</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Date de naissance</label>
+              <input name="date_naissance" class="form-control" placeholder="jj/mm/aaaa">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Nationalité</label>
+              <input name="nationalite" class="form-control" value="HTI">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Date d'expiration</label>
+              <input name="date_expiration" class="form-control" placeholder="jj/mm/aaaa">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Point d'entrée</label>
+              <select name="point_entree" class="form-select">
+                {% for p in points %}<option>{{ p }}</option>{% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-success px-4">
+              <i class="bi bi-check-lg"></i> Enregistrer
+            </button>
+            <a href="javascript:history.back()" class="btn btn-outline-secondary px-4">Annuler</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
