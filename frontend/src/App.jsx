@@ -12,6 +12,7 @@ import Alertes from "./pages/Alertes";
 import Reports from "./pages/Reports";
 import Cameras from "./pages/Cameras";
 import Admin from "./pages/Admin";
+import Scanner from "./pages/Scanner";
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -62,6 +63,7 @@ export default function App() {
       <Route path="/cameras" element={<PrivateRoute><Layout><Cameras /></Layout></PrivateRoute>} />
       <Route path="/rapports" element={<PrivateRoute><Layout><Reports /></Layout></PrivateRoute>} />
       <Route path="/admin" element={<PrivateRoute><Layout><Admin /></Layout></PrivateRoute>} />
+      <Route path="/scanner" element={<PrivateRoute><Layout><Scanner /></Layout></PrivateRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </ErrorBoundary>

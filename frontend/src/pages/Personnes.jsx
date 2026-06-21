@@ -2,6 +2,43 @@ import { useEffect, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
 
+function QRModal({ person, type, onClose }) {
+  const [src, setSrc] = useState(null);
+  const endpoint = type === "conducteur" ? "conducteur" : "pieton";
+  useEffect(() => {
+    api.get(`/api/qr/${endpoint}/${person.id}`, { responseType: "blob" })
+      .then(r => setSrc(URL.createObjectURL(r.data)))
+      .catch(() => toast.error("Erreur génération QR"));
+  }, [person.id]);
+
+  const print = () => {
+    const w = window.open("", "_blank");
+    w.document.write(`<html><body style="text-align:center;font-family:sans-serif;padding:20px">
+      <img src="${src}" style="width:200px"><br>
+      <strong style="font-size:18px">${person.prenom || ""} ${person.nom || ""}</strong><br>
+      <span style="color:#666">${type === "conducteur" ? "Conducteur" : "Piéton"} · ${person.numero_document || "—"}</span><br>
+      <span style="font-size:12px;color:#999">HOTEL MONTANA</span>
+    </body></html>`);
+    w.document.close();
+    w.print();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 320, textAlign: "center" }} onClick={e => e.stopPropagation()}>
+        <h3>Badge QR — {person.prenom} {person.nom}</h3>
+        <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>{person.numero_document || "—"}</p>
+        {src ? <img src={src} alt="QR" style={{ width: 200, height: 200, border: "1px solid var(--border)" }} />
+             : <div style={{ width: 200, height: 200, background: "var(--bg)", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center" }}>Chargement…</div>}
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
+          <button className="btn btn-primary btn-sm" onClick={print} disabled={!src}>Imprimer</button>
+          <button className="btn btn-outline btn-sm" onClick={onClose}>Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const BLANK = { nom:"", prenom:"", numero_document:"", type_document:"CNI", date_naissance:"", nationalite:"HTI", date_expiration:"", point_entree:"Principal" };
 
 export default function Personnes({ mode }) {
@@ -13,6 +50,7 @@ export default function Personnes({ mode }) {
   const [q, setQ] = useState("");
   const [form, setForm] = useState(BLANK);
   const [showForm, setShowForm] = useState(false);
+  const [qrPerson, setQrPerson] = useState(null);
 
   const load = () => api.get(`${endpoint}?q=${q}&limit=300`).then(r => setRows(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   useEffect(() => { load(); }, [q, mode]);
@@ -87,6 +125,8 @@ export default function Personnes({ mode }) {
         </div>
       )}
 
+      {qrPerson && <QRModal person={qrPerson} type={mode} onClose={() => setQrPerson(null)} />}
+
       <div className="card">
         <div className="table-wrap">
           <table>
@@ -101,7 +141,10 @@ export default function Personnes({ mode }) {
                   <td style={{ color:"var(--muted)" }}>{r.nationalite||"—"}</td>
                   <td>{r.point_entree}</td>
                   <td style={{ color:"var(--muted)", fontSize:12 }}>{r.timestamp?.slice(0,16)}</td>
-                  <td><button className="btn btn-icon btn-sm" onClick={() => del(r.id)}>🗑</button></td>
+                  <td style={{ display:"flex", gap:4 }}>
+                    <button className="btn btn-icon btn-sm" title="Badge QR" onClick={() => setQrPerson(r)}>QR</button>
+                    <button className="btn btn-icon btn-sm" onClick={() => del(r.id)}>🗑</button>
+                  </td>
                 </tr>
               ))}
               {rows.length===0 && <tr><td colSpan={8} className="empty">Aucun enregistrement</td></tr>}

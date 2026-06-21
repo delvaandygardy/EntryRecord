@@ -2,6 +2,42 @@ import { useEffect, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
 
+function QRModal({ emp, onClose }) {
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    api.get(`/api/qr/employe/${emp.id}`, { responseType: "blob" })
+      .then(r => setSrc(URL.createObjectURL(r.data)))
+      .catch(() => toast.error("Erreur génération QR"));
+  }, [emp.id]);
+
+  const print = () => {
+    const w = window.open("", "_blank");
+    w.document.write(`<html><body style="text-align:center;font-family:sans-serif;padding:20px">
+      <img src="${src}" style="width:200px"><br>
+      <strong style="font-size:18px">${emp.prenom} ${emp.nom}</strong><br>
+      <span style="color:#666">${emp.poste || "Employé"} · ${emp.matricule}</span><br>
+      <span style="font-size:12px;color:#999">HOTEL MONTANA</span>
+    </body></html>`);
+    w.document.close();
+    w.print();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 320, textAlign: "center" }} onClick={e => e.stopPropagation()}>
+        <h3>Badge QR — {emp.prenom} {emp.nom}</h3>
+        <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>{emp.matricule}</p>
+        {src ? <img src={src} alt="QR" style={{ width: 200, height: 200, border: "1px solid var(--border)" }} />
+             : <div style={{ width: 200, height: 200, background: "var(--bg)", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center" }}>Chargement…</div>}
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
+          <button className="btn btn-primary btn-sm" onClick={print} disabled={!src}>Imprimer</button>
+          <button className="btn btn-outline btn-sm" onClick={onClose}>Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const BLANK = { matricule:"", nom:"", prenom:"", poste:"", departement:"", telephone:"", email:"", date_embauche:"", statut:"Actif" };
 
 export default function Employes() {
@@ -11,6 +47,7 @@ export default function Employes() {
   const [form, setForm] = useState(BLANK);
   const [editId, setEditId] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [qrEmp, setQrEmp] = useState(null);
 
   const load = () =>
     api.get(`/api/employes?q=${q}&statut=${statut}`).then(r => setRows(Array.isArray(r.data) ? r.data : [])).catch(() => {});
@@ -83,6 +120,8 @@ export default function Employes() {
         </div>
       )}
 
+      {qrEmp && <QRModal emp={qrEmp} onClose={() => setQrEmp(null)} />}
+
       <div className="card">
         <div className="table-wrap">
           <table>
@@ -97,6 +136,7 @@ export default function Employes() {
                   <td style={{ color:"var(--muted)", fontSize:12 }}>{e.telephone||"—"}</td>
                   <td><span className={`badge ${e.statut==="Actif"?"badge-success":"badge-muted"}`}>{e.statut}</span></td>
                   <td style={{ display:"flex", gap:4 }}>
+                    <button className="btn btn-icon btn-sm" title="Badge QR" onClick={() => setQrEmp(e)}>QR</button>
                     <button className="btn btn-icon btn-sm" onClick={() => openEdit(e)}>✏️</button>
                     <button className="btn btn-icon btn-sm" onClick={() => del(e.id)}>🗑</button>
                   </td>

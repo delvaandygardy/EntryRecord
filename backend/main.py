@@ -55,7 +55,7 @@ class _CamWorker:
 _cam_workers: dict[int, _CamWorker] = {}
 
 from backend.routers import (auth_router, vehicules, personnes, employes,
-                              blacklist, alertes, cameras, reports, admin)
+                              blacklist, alertes, cameras, reports, admin, scanner)
 
 app = FastAPI(title="Système d'Enregistrement Automatique", version="2.0")
 
@@ -76,6 +76,7 @@ app.include_router(alertes.router)
 app.include_router(cameras.router)
 app.include_router(reports.router)
 app.include_router(admin.router)
+app.include_router(scanner.router)
 
 # Run DB migrations on startup
 @app.on_event("startup")

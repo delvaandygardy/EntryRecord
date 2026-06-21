@@ -8,6 +8,7 @@ const NAV = [
   { path: "/conducteurs",label:"Conducteurs",      icon: "🪪" },
   { path: "/pietons",   label: "Piétons",           icon: "🚶" },
   { path: "/employes",  label: "Employés",          icon: "💼" },
+  { path: "/scanner",   label: "Scanner",             icon: "📲" },
   { path: "/presences", label: "Présences",         icon: "📋" },
   { path: "/blacklist", label: "Liste Noire",       icon: "🚫" },
   { path: "/alertes",   label: "Alertes",           icon: "🔔", alert: true },

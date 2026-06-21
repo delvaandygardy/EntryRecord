@@ -74,6 +74,11 @@ class BadgeRequest(BaseModel):
     point_entree: str = "Principal"
 
 
+class ScanRequest(BaseModel):
+    code: str
+    point_entree: str = "Principal"
+
+
 class BlacklistPlaqueCreate(BaseModel):
     plaque: str
     motif: Optional[str] = None
