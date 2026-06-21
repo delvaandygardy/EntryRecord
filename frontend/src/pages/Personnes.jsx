@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
+import DocumentScanner from "../components/DocumentScanner";
 
 function QRModal({ person, type, onClose }) {
   const [src, setSrc] = useState(null);
@@ -51,6 +52,7 @@ export default function Personnes({ mode }) {
   const [form, setForm] = useState(BLANK);
   const [showForm, setShowForm] = useState(false);
   const [qrPerson, setQrPerson] = useState(null);
+  const [showScanner, setShowScanner] = useState(false);
 
   const load = () => api.get(`${endpoint}?q=${q}&limit=300`).then(r => setRows(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   useEffect(() => { load(); }, [q, mode]);
@@ -80,6 +82,7 @@ export default function Personnes({ mode }) {
     <div>
       <div className="page-header">
         <h1 className="page-title">{title}</h1>
+        <button className="btn btn-outline btn-sm" onClick={() => setShowScanner(true)}>🔍 Scanner</button>
         <button className="btn btn-success btn-sm" onClick={() => setShowForm(true)}>+ Ajouter</button>
       </div>
 
@@ -89,10 +92,28 @@ export default function Personnes({ mode }) {
         <span style={{ color:"var(--muted)", fontSize:12 }}>{rows.length} résultat(s)</span>
       </div>
 
+      {showScanner && (
+        <DocumentScanner
+          onResult={(fields) => {
+            setForm(prev => ({ ...prev, ...fields }));
+            setShowScanner(false);
+            setShowForm(true);
+            toast.success("Formulaire rempli automatiquement");
+          }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
+
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>Enregistrer {isConducteur ? "un conducteur" : "un piéton"}</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>Enregistrer {isConducteur ? "un conducteur" : "un piéton"}</h3>
+              <button type="button" className="btn btn-outline btn-sm"
+                onClick={() => { setShowForm(false); setShowScanner(true); }}>
+                🔍 Scanner document
+              </button>
+            </div>
             <form onSubmit={save}>
               <div className="form-row">
                 <div className="form-group"><label>Nom</label>

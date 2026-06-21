@@ -1,10 +1,92 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from fastapi.responses import StreamingResponse
 import qrcode
 import io
+import re
+import threading
+import numpy as np
+import cv2
+from pyzbar.pyzbar import decode as pyzbar_decode
 from backend.deps import get_db, get_current_user
 from backend.schemas import ScanRequest
 import psycopg2.extras
+
+# ── OCR lazy init (EasyOCR heavy, load once) ──────────────────────────────
+_ocr_lock = threading.Lock()
+_ocr_reader = None
+
+def _get_ocr():
+    global _ocr_reader
+    if _ocr_reader is None:
+        with _ocr_lock:
+            if _ocr_reader is None:
+                import easyocr
+                _ocr_reader = easyocr.Reader(["fr", "en"], gpu=False, verbose=False)
+    return _ocr_reader
+
+
+# ── MRZ helpers ────────────────────────────────────────────────────────────
+
+def _parse_date(s: str, is_birth: bool = True) -> str | None:
+    try:
+        yy, mm, dd = int(s[:2]), int(s[2:4]), int(s[4:6])
+        year = (1900 if is_birth and yy > 30 else 2000) + yy
+        return f"{year:04d}-{mm:02d}-{dd:02d}"
+    except Exception:
+        return None
+
+
+def _clean(s: str) -> str:
+    return s.replace("<", " ").strip().title()
+
+
+def _parse_td3(l1: str, l2: str) -> dict:
+    """Passeport ICAO TD3 — 2 lignes × 44 caractères."""
+    l1 = l1.ljust(44, "<")
+    l2 = l2.ljust(44, "<")
+    country = l1[2:5].replace("<", "")
+    parts = l1[5:].split("<<", 1)
+    surname = _clean(parts[0])
+    prenom = _clean(parts[1]) if len(parts) > 1 else ""
+    doc_no = l2[0:9].replace("<", "")
+    nat = l2[10:13].replace("<", "") or country
+    dob = _parse_date(l2[13:19], is_birth=True)
+    exp = _parse_date(l2[21:27], is_birth=False)
+    return {
+        "nom": surname, "prenom": prenom,
+        "numero_document": doc_no, "type_document": "PASSEPORT",
+        "nationalite": nat, "date_naissance": dob, "date_expiration": exp,
+    }
+
+
+def _parse_td1(l1: str, l2: str, l3: str) -> dict:
+    """Carte d'identité TD1 — 3 lignes × 30 caractères."""
+    l1, l2, l3 = l1.ljust(30, "<"), l2.ljust(30, "<"), l3.ljust(30, "<")
+    doc_no = l1[5:14].replace("<", "")
+    dob = _parse_date(l2[0:6], is_birth=True)
+    exp = _parse_date(l2[8:14], is_birth=False)
+    nat = l2[15:18].replace("<", "")
+    parts = l3.split("<<", 1)
+    surname = _clean(parts[0])
+    prenom = _clean(parts[1]) if len(parts) > 1 else ""
+    return {
+        "nom": surname, "prenom": prenom,
+        "numero_document": doc_no, "type_document": "CNI",
+        "nationalite": nat, "date_naissance": dob, "date_expiration": exp,
+    }
+
+
+def parse_mrz_text(text: str) -> dict | None:
+    """Analyse un texte brut contenant des lignes MRZ."""
+    lines = [re.sub(r"[^A-Z0-9<]", "", l.upper()) for l in re.split(r"[\n\r\t|;]+", text)]
+    lines = [l for l in lines if len(l) >= 28]
+    td3 = [l for l in lines if len(l) == 44]
+    if len(td3) >= 2:
+        return _parse_td3(td3[0], td3[1])
+    td1 = [l for l in lines if len(l) == 30]
+    if len(td1) >= 3:
+        return _parse_td1(td1[0], td1[1], td1[2])
+    return None
 
 router = APIRouter(tags=["Scanner"])
 
@@ -158,3 +240,91 @@ def _passage(table: str, record_id: int, point: str, conn):
             "poste": None,
         },
     }
+
+
+# ── Document scan (image → champs) ────────────────────────────────────────
+
+@router.post("/api/scan/document")
+async def scan_document(file: UploadFile = File(...), _=Depends(get_current_user)):
+    """Analyse une image de document et retourne les champs extraits."""
+    data = await file.read()
+    nparr = np.frombuffer(data, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img is None:
+        raise HTTPException(400, "Image invalide ou format non supporté")
+
+    # 1 — Codes-barres / QR (pyzbar)
+    result = _scan_barcodes(img)
+    if result:
+        return result
+
+    # 2 — MRZ via OCR (EasyOCR)
+    result = _scan_mrz_ocr(img)
+    if result:
+        return result
+
+    raise HTTPException(422, "Aucune information lisible — vérifiez la qualité de l'image")
+
+
+@router.post("/api/scan/mrz-text")
+async def scan_mrz_text(body: dict, _=Depends(get_current_user)):
+    """Analyse du texte MRZ brut (lecteur MRZ / pistolet USB)."""
+    text = body.get("text", "")
+    result = parse_mrz_text(text)
+    if not result:
+        raise HTTPException(422, "Texte MRZ non reconnu")
+    return result
+
+
+def _scan_barcodes(img) -> dict | None:
+    """Détecte et décode les codes-barres avec pyzbar."""
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    for processed in [gray, cv2.equalizeHist(gray)]:
+        barcodes = pyzbar_decode(processed)
+        for bc in barcodes:
+            raw = bc.data.decode("utf-8", errors="ignore").strip()
+            parsed = _parse_barcode_data(raw, bc.type)
+            if parsed:
+                return parsed
+    return None
+
+
+def _parse_barcode_data(raw: str, bc_type: str) -> dict | None:
+    """Tente d'extraire des infos structurées d'un code-barres."""
+    # QR code / HMT badge interne
+    if raw.startswith("HMT-"):
+        return None  # badge interne, pas un document
+
+    # PDF417 typique (permis haïtien / AAMVA format)
+    if bc_type in ("PDF417", "CODE128", "CODE39") and len(raw) > 10:
+        return {
+            "numero_document": raw[:20].strip(),
+            "type_document": "PERMIS" if bc_type == "PDF417" else "CNI",
+        }
+
+    # Essai MRZ encodé dans un QR/barcode
+    mrz = parse_mrz_text(raw)
+    if mrz:
+        return mrz
+
+    return None
+
+
+def _scan_mrz_ocr(img) -> dict | None:
+    """Extrait les lignes MRZ d'une image via EasyOCR."""
+    # Rogner la zone basse (MRZ en bas du document)
+    h, w = img.shape[:2]
+    zone = img[int(h * 0.55):, :]
+
+    gray = cv2.cvtColor(zone, cv2.COLOR_BGR2GRAY)
+    gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    try:
+        ocr = _get_ocr()
+        results = ocr.readtext(thresh, allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
+        text = " \n ".join([r[1] for r in results if r[2] > 0.3])
+        return parse_mrz_text(text)
+    except Exception:
+        return None
