@@ -311,20 +311,53 @@ def _parse_barcode_data(raw: str, bc_type: str) -> dict | None:
 
 
 def _scan_mrz_ocr(img) -> dict | None:
-    """Extrait les lignes MRZ d'une image via EasyOCR."""
-    # Rogner la zone basse (MRZ en bas du document)
+    """Extrait les lignes MRZ via Tesseract (OCR-B), avec fallback EasyOCR."""
     h, w = img.shape[:2]
-    zone = img[int(h * 0.55):, :]
 
+    # Essayer plusieurs zones verticales du document
+    for y_ratio in [0.60, 0.70, 0.50, 0.40, 0.0]:
+        zone = img[int(h * y_ratio):, :]
+        result = _ocr_zone_tesseract(zone) or _ocr_zone_easyocr(zone)
+        if result:
+            return result
+    return None
+
+
+def _preprocess_mrz(zone):
+    """Prépare une zone pour l'OCR : redimensionne, seuillage, débruite."""
     gray = cv2.cvtColor(zone, cv2.COLOR_BGR2GRAY)
-    gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    gray = cv2.resize(gray, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
     gray = cv2.GaussianBlur(gray, (3, 3), 0)
-    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    adapt = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 8)
+    return [otsu, adapt, gray]
 
+
+def _ocr_zone_tesseract(zone) -> dict | None:
+    """OCR via Tesseract (meilleur pour MRZ OCR-B)."""
+    try:
+        import pytesseract
+        cfg = "--oem 1 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<"
+        for img in _preprocess_mrz(zone):
+            text = pytesseract.image_to_string(img, config=cfg)
+            result = parse_mrz_text(text)
+            if result:
+                return result
+    except Exception:
+        pass
+    return None
+
+
+def _ocr_zone_easyocr(zone) -> dict | None:
+    """Fallback EasyOCR si Tesseract indisponible."""
     try:
         ocr = _get_ocr()
-        results = ocr.readtext(thresh, allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
-        text = " \n ".join([r[1] for r in results if r[2] > 0.3])
-        return parse_mrz_text(text)
+        for img in _preprocess_mrz(zone):
+            results = ocr.readtext(img, allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
+            text = "\n".join(r[1] for r in results if r[2] > 0.25)
+            result = parse_mrz_text(text)
+            if result:
+                return result
     except Exception:
-        return None
+        pass
+    return None
