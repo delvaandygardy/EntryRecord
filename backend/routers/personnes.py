@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Body, HTTPException
 from backend.deps import get_db, get_current_user, require_write
 from backend.schemas import PersonneCreate
 import psycopg2.extras
@@ -8,8 +8,9 @@ router = APIRouter(tags=["Personnes"])
 
 def _s(rows):
     for r in rows:
-        if isinstance(r.get("timestamp"), datetime):
-            r["timestamp"] = r["timestamp"].isoformat()
+        for field in ("timestamp", "heure_sortie"):
+            if isinstance(r.get(field), datetime):
+                r[field] = r[field].isoformat()
     return rows
 
 def _check_blacklist(conn, numero_document):
@@ -51,6 +52,18 @@ def create_conducteur(body: PersonneCreate, conn=Depends(get_db), _=Depends(requ
     return {"id": cid, "blacklist": bl is not None}
 
 
+@router.patch("/api/conducteurs/{cid}/sortie", status_code=200)
+def sortie_conducteur(cid: int, body: dict = Body(default={}), conn=Depends(get_db), _=Depends(require_write)):
+    point = (body or {}).get("point_sortie", "Principal")
+    cur = conn.cursor()
+    cur.execute("UPDATE conducteurs SET heure_sortie=NOW(), point_sortie=%s WHERE id=%s AND heure_sortie IS NULL",
+                (point, cid))
+    if cur.rowcount == 0:
+        raise HTTPException(400, "Sortie déjà enregistrée ou conducteur introuvable")
+    conn.commit()
+    return {"message": "Sortie enregistrée"}
+
+
 @router.delete("/api/conducteurs/{cid}", status_code=204)
 def delete_conducteur(cid: int, conn=Depends(get_db), _=Depends(require_write)):
     cur = conn.cursor()
@@ -88,6 +101,18 @@ def create_pieton(body: PersonneCreate, conn=Depends(get_db), _=Depends(require_
     pid = cur.fetchone()[0]
     conn.commit()
     return {"id": pid, "blacklist": bl is not None}
+
+
+@router.patch("/api/pietons/{pid}/sortie", status_code=200)
+def sortie_pieton(pid: int, body: dict = Body(default={}), conn=Depends(get_db), _=Depends(require_write)):
+    point = (body or {}).get("point_sortie", "Principal")
+    cur = conn.cursor()
+    cur.execute("UPDATE pietons SET heure_sortie=NOW(), point_sortie=%s WHERE id=%s AND heure_sortie IS NULL",
+                (point, pid))
+    if cur.rowcount == 0:
+        raise HTTPException(400, "Sortie déjà enregistrée ou piéton introuvable")
+    conn.commit()
+    return {"message": "Sortie enregistrée"}
 
 
 @router.delete("/api/pietons/{pid}", status_code=204)

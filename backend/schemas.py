@@ -37,6 +37,7 @@ class VehiculeCreate(BaseModel):
     confidence: Optional[float] = 1.0
     point_entree: str = "Principal"
     notes: Optional[str] = None
+    conducteur_id: Optional[int] = None
 
 
 class PersonneCreate(BaseModel):

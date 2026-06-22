@@ -25,6 +25,7 @@ export default function Scanner() {
       setResult(entry);
       setScans(prev => [entry, ...prev].slice(0, 30));
       if (data.blacklist) toast.error("⚠️ LISTE NOIRE — Alerte créée !", { duration: 8000 });
+      if (data.auto_vehicle) toast.success(`🚗 Lié au véhicule ${data.auto_vehicle.plaque}`, { duration: 5000 });
     } catch (err) {
       const msg = err.response?.data?.detail || "Code non reconnu";
       setResult({ error: msg, code: raw, ts: new Date().toLocaleTimeString("fr") });
@@ -112,6 +113,11 @@ export default function Scanner() {
                     </div>
                     {result.personne?.poste && (
                       <div style={{ fontSize: 12, color: "var(--muted)" }}>{result.personne.poste}</div>
+                    )}
+                    {result.auto_vehicle && (
+                      <div style={{ fontSize: 12, color: "#3fb950", marginTop: 4 }}>
+                        🚗 Lié automatiquement au véhicule <strong>{result.auto_vehicle.plaque}</strong>
+                      </div>
                     )}
                     <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>{result.ts}</div>
                   </>

@@ -74,6 +74,14 @@ export default function Personnes({ mode }) {
     await api.delete(`${endpoint}/${id}`); load();
   };
 
+  const sortie = async (id) => {
+    try {
+      await api.patch(`${endpoint}/${id}/sortie`, { point_sortie: "Principal" });
+      toast.success("Sortie enregistrée");
+      load();
+    } catch (err) { toast.error(err.response?.data?.detail || "Erreur sortie"); }
+  };
+
   const docTypes = isConducteur
     ? ["PERMIS","CNI","PASSEPORT"]
     : ["CNI","PASSEPORT","TITRE_SEJOUR","AUTRE"];
@@ -151,23 +159,47 @@ export default function Personnes({ mode }) {
       <div className="card">
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Nom</th><th>N° Document</th><th>Type</th><th>Naissance</th><th>Nationalité</th><th>Entrée</th><th>Date/Heure</th><th></th></tr></thead>
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>N° Document</th>
+                <th>Statut</th>
+                <th>Point Entrée</th>
+                <th>Heure Entrée</th>
+                <th>Point Sortie</th>
+                <th>Heure Sortie</th>
+                <th></th>
+              </tr>
+            </thead>
             <tbody>
-              {rows.map(r => (
-                <tr key={r.id}>
-                  <td>{r.prenom} <strong>{r.nom}</strong></td>
-                  <td><code style={{fontSize:12}}>{r.numero_document||"—"}</code></td>
-                  <td><span className="badge badge-muted">{r.type_document}</span></td>
-                  <td style={{ color:"var(--muted)", fontSize:12 }}>{r.date_naissance||"—"}</td>
-                  <td style={{ color:"var(--muted)" }}>{r.nationalite||"—"}</td>
-                  <td>{r.point_entree}</td>
-                  <td style={{ color:"var(--muted)", fontSize:12 }}>{r.timestamp?.slice(0,16)}</td>
-                  <td style={{ display:"flex", gap:4 }}>
-                    <button className="btn btn-icon btn-sm" title="Badge QR" onClick={() => setQrPerson(r)}>QR</button>
-                    <button className="btn btn-icon btn-sm" onClick={() => del(r.id)}>🗑</button>
-                  </td>
-                </tr>
-              ))}
+              {rows.map(r => {
+                const inside = !r.heure_sortie;
+                return (
+                  <tr key={r.id}>
+                    <td>{r.prenom} <strong>{r.nom}</strong></td>
+                    <td><code style={{fontSize:12}}>{r.numero_document||"—"}</code></td>
+                    <td>
+                      <span className={`badge ${inside ? "badge-success" : "badge-muted"}`}>
+                        {inside ? "En cours" : "Sorti"}
+                      </span>
+                    </td>
+                    <td style={{ color:"var(--muted)", fontSize:12 }}>{r.point_entree||"—"}</td>
+                    <td style={{ color:"var(--muted)", fontSize:12 }}>{r.timestamp?.slice(0,16)||"—"}</td>
+                    <td style={{ color:"var(--muted)", fontSize:12 }}>{r.point_sortie||"—"}</td>
+                    <td style={{ fontSize:12 }}>
+                      {r.heure_sortie
+                        ? <span style={{ color:"var(--muted)" }}>{r.heure_sortie.slice(0,16)}</span>
+                        : <button className="btn btn-sm" style={{ background:"#e53e3e", color:"#fff", padding:"2px 8px" }}
+                            onClick={() => sortie(r.id)}>Sortie</button>
+                      }
+                    </td>
+                    <td style={{ display:"flex", gap:4 }}>
+                      <button className="btn btn-icon btn-sm" title="Badge QR" onClick={() => setQrPerson(r)}>QR</button>
+                      <button className="btn btn-icon btn-sm" onClick={() => del(r.id)}>🗑</button>
+                    </td>
+                  </tr>
+                );
+              })}
               {rows.length===0 && <tr><td colSpan={8} className="empty">Aucun enregistrement</td></tr>}
             </tbody>
           </table>

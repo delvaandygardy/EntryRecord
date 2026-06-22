@@ -214,25 +214,65 @@ def _passage(table: str, record_id: int, point: str, conn):
             )
             conn.commit()
 
+    # Chercher une visite ouverte (entrée sans sortie) pour ce visiteur
+    open_visit = None
+    if p.get("numero_document"):
+        cur.execute(
+            f"SELECT id FROM {table} WHERE numero_document=%s AND heure_sortie IS NULL ORDER BY timestamp DESC LIMIT 1",
+            (p["numero_document"],),
+        )
+        open_visit = cur.fetchone()
+    elif p.get("heure_sortie") is None:
+        open_visit = p
+
     cur2 = conn.cursor()
-    cur2.execute(
-        f"""INSERT INTO {table} (nom,prenom,numero_document,type_document,
-            date_naissance,nationalite,date_expiration,point_entree)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-        (
-            p["nom"], p["prenom"], p["numero_document"], p["type_document"],
-            p["date_naissance"], p["nationalite"], p["date_expiration"], point,
-        ),
-    )
-    new_id = cur2.fetchone()[0]
-    conn.commit()
+    if open_visit:
+        cur2.execute(
+            f"UPDATE {table} SET heure_sortie=NOW(), point_sortie=%s WHERE id=%s",
+            (point, open_visit["id"]),
+        )
+        conn.commit()
+        ptype = "SORTIE"
+        new_id = open_visit["id"]
+    else:
+        cur2.execute(
+            f"""INSERT INTO {table} (nom,prenom,numero_document,type_document,
+                date_naissance,nationalite,date_expiration,point_entree)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (p["nom"], p["prenom"], p["numero_document"], p["type_document"],
+             p["date_naissance"], p["nationalite"], p["date_expiration"], point),
+        )
+        new_id = cur2.fetchone()[0]
+        conn.commit()
+        ptype = "ENTREE"
+
+    # Auto-liaison véhicule : si conducteur vient d'entrer, cherche véhicule récent sans conducteur
+    auto_vehicle = None
+    if table == "conducteurs" and ptype == "ENTREE":
+        cur3 = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur3.execute("""
+            SELECT id, plaque FROM vehicules
+            WHERE point_entree = %s
+              AND heure_sortie IS NULL
+              AND conducteur_id IS NULL
+              AND timestamp > NOW() - INTERVAL '15 minutes'
+            ORDER BY timestamp DESC LIMIT 1
+        """, (point,))
+        recent_veh = cur3.fetchone()
+        if recent_veh:
+            cur4 = conn.cursor()
+            cur4.execute("UPDATE vehicules SET conducteur_id = %s WHERE id = %s",
+                         (new_id, recent_veh["id"]))
+            conn.commit()
+            auto_vehicle = {"id": recent_veh["id"], "plaque": recent_veh["plaque"]}
 
     cat = "conducteur" if table == "conducteurs" else "pieton"
     return {
         "id": new_id,
-        "type": "ENTREE",
+        "type": ptype,
         "categorie": cat,
         "blacklist": alerte_blacklist,
+        "auto_vehicle": auto_vehicle,
         "personne": {
             "nom": p["nom"],
             "prenom": p["prenom"],

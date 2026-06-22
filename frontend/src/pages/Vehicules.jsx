@@ -1,29 +1,42 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
 
-function ManualPlateEntry({ result, saving, onSave }) {
-  const [plate, setPlate] = useState("");
+function ConducteurSelect({ value, onChange, conducteurs }) {
   return (
-    <div>
+    <select className="form-select" value={value} onChange={e => onChange(e.target.value)}>
+      <option value="">— Aucun conducteur —</option>
+      {conducteurs.map(c => (
+        <option key={c.id} value={c.id}>{c.nom} {c.prenom}</option>
+      ))}
+    </select>
+  );
+}
+
+function ManualPlateEntry({ result, saving, onSave, conducteurs }) {
+  const [plate, setPlate] = useState("");
+  const [condId, setCondId] = useState("");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {result.anpr_error && (
-        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8, padding: "6px 10px", background: "var(--surface2)", borderRadius: 6 }}>
+        <div style={{ fontSize: 12, color: "var(--muted)", padding: "6px 10px", background: "var(--surface2)", borderRadius: 6 }}>
           ℹ️ Reconnaissance automatique indisponible. Entrez la plaque manuellement.
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input
-          className="form-control"
-          placeholder="Plaque d'immatriculation…"
-          value={plate}
-          onChange={e => setPlate(e.target.value.toUpperCase())}
-          style={{ fontFamily: "monospace", fontSize: 16, letterSpacing: 2, flex: 1 }}
-          autoFocus
-        />
+      <input
+        className="form-control"
+        placeholder="Plaque d'immatriculation…"
+        value={plate}
+        onChange={e => setPlate(e.target.value.toUpperCase())}
+        style={{ fontFamily: "monospace", fontSize: 16, letterSpacing: 2 }}
+        autoFocus
+      />
+      <ConducteurSelect value={condId} onChange={setCondId} conducteurs={conducteurs} />
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
           className="btn btn-success"
           disabled={!plate.trim() || saving === plate}
-          onClick={() => onSave(plate.trim(), 1.0, result.point_entree)}
+          onClick={() => onSave(plate.trim(), 1.0, result.point_entree, condId ? parseInt(condId) : null)}
         >
           {saving === plate ? "…" : "Enregistrer"}
         </button>
@@ -32,13 +45,14 @@ function ManualPlateEntry({ result, saving, onSave }) {
   );
 }
 
-function CaptureModal({ cameras, onClose, onSaved }) {
+function CaptureModal({ cameras, conducteurs, onClose, onSaved }) {
   const [camId, setCamId] = useState(cameras[0]?.id || "");
   const [loading, setLoading] = useState(false);
   const [anprLoading, setAnprLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [plates, setPlates] = useState([]);
   const [saving, setSaving] = useState(null);
+  const [condId, setCondId] = useState("");
 
   const capture = async () => {
     if (!camId) return;
@@ -46,45 +60,35 @@ function CaptureModal({ cameras, onClose, onSaved }) {
     setResult(null);
     setPlates([]);
     try {
-      // Étape 1 : capture image (rapide ~10s)
       const { data } = await api.post(`/api/cameras/${camId}/capture`);
       setResult(data);
       setLoading(false);
-      // Étape 2 : ANPR en arrière-plan (lent, mais l'image est déjà affichée)
       setAnprLoading(true);
       try {
-        const { data: anprData } = await api.post(`/api/cameras/${camId}/anpr`, {
-          image_path: data.image_path,
-        });
+        const { data: anprData } = await api.post(`/api/cameras/${camId}/anpr`, { image_path: data.image_path });
         setPlates(anprData.plates || []);
-      } catch {
-        setPlates([]);
-      } finally {
-        setAnprLoading(false);
-      }
+      } catch { setPlates([]); }
+      finally { setAnprLoading(false); }
     } catch (err) {
       toast.error(err.response?.data?.detail || "Erreur de capture");
       setLoading(false);
     }
   };
 
-  const savePlate = async (plate, confidence, point_entree) => {
+  const savePlate = async (plate, confidence, point_entree, cid) => {
     setSaving(plate);
     try {
       const { data } = await api.post("/api/vehicules", {
-        plaque: plate,
-        confidence,
-        point_entree,
+        plaque: plate, confidence, point_entree,
         notes: `Capturé via ${result?.camera_nom || "caméra"}`,
+        conducteur_id: cid ?? (condId ? parseInt(condId) : null),
       });
       if (data.blacklist) toast.error(`⚠️ Plaque ${plate} en liste noire !`);
       else toast.success(`Plaque ${plate} enregistrée`);
       onSaved();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Erreur");
-    } finally {
-      setSaving(null);
-    }
+    } finally { setSaving(null); }
   };
 
   return (
@@ -95,13 +99,18 @@ function CaptureModal({ cameras, onClose, onSaved }) {
           <button className="btn btn-outline btn-sm" onClick={onClose}>✕</button>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <select className="form-select" value={camId} onChange={e => setCamId(e.target.value)} style={{ flex: 1 }}>
             {cameras.map(c => <option key={c.id} value={c.id}>{c.nom} — {c.point_entree}</option>)}
           </select>
           <button className="btn btn-primary" onClick={capture} disabled={loading || !camId}>
             {loading ? "Capture…" : "📸 Capturer"}
           </button>
+        </div>
+
+        <div className="form-group" style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 4 }}>Conducteur associé</label>
+          <ConducteurSelect value={condId} onChange={setCondId} conducteurs={conducteurs} />
         </div>
 
         {loading && (
@@ -112,17 +121,13 @@ function CaptureModal({ cameras, onClose, onSaved }) {
 
         {result && (
           <div>
-            <img
-              src={result.image_path}
-              alt="Capture"
-              style={{ width: "100%", borderRadius: 8, marginBottom: 12, maxHeight: 360, objectFit: "contain", background: "#000" }}
-            />
+            <img src={result.image_path} alt="Capture"
+              style={{ width: "100%", borderRadius: 8, marginBottom: 12, maxHeight: 360, objectFit: "contain", background: "#000" }} />
 
             {anprLoading && (
               <div style={{ padding: "10px 14px", background: "var(--surface2)", borderRadius: 8, marginBottom: 10,
                 display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--muted)" }}>
-                <span style={{ animation: "pulse 1s infinite", display:"inline-block" }}>⏳</span>
-                Analyse ANPR en cours… (peut prendre 30-60s)
+                <span>⏳</span> Analyse ANPR en cours… (peut prendre 30-60s)
               </div>
             )}
 
@@ -133,27 +138,18 @@ function CaptureModal({ cameras, onClose, onSaved }) {
                   {plates.map((p, i) => (
                     <div key={i} style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "10px 14px", background: "var(--surface2)", borderRadius: 8,
-                      border: "1px solid var(--border)"
+                      padding: "10px 14px", background: "var(--surface2)", borderRadius: 8, border: "1px solid var(--border)"
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <span style={{
-                          fontFamily: "monospace", fontSize: 20, fontWeight: 700,
-                          letterSpacing: 3, color: "#f0f6fc"
-                        }}>{p.plate}</span>
+                        <span style={{ fontFamily: "monospace", fontSize: 20, fontWeight: 700, letterSpacing: 3, color: "#f0f6fc" }}>{p.plate}</span>
                         <span style={{
                           background: p.confidence > 0.8 ? "#238636" : p.confidence > 0.5 ? "#9e6a03" : "#b62324",
                           color: "#fff", borderRadius: 4, padding: "2px 8px", fontSize: 11
-                        }}>
-                          {(p.confidence * 100).toFixed(0)}%
-                        </span>
+                        }}>{(p.confidence * 100).toFixed(0)}%</span>
                         <span style={{ color: "var(--muted)", fontSize: 11 }}>{p.source}</span>
                       </div>
-                      <button
-                        className="btn btn-success btn-sm"
-                        disabled={saving === p.plate}
-                        onClick={() => savePlate(p.plate, p.confidence, result.point_entree)}
-                      >
+                      <button className="btn btn-success btn-sm" disabled={saving === p.plate}
+                        onClick={() => savePlate(p.plate, p.confidence, result.point_entree, null)}>
                         {saving === p.plate ? "…" : "Enregistrer"}
                       </button>
                     </div>
@@ -161,17 +157,11 @@ function CaptureModal({ cameras, onClose, onSaved }) {
                 </div>
               </div>
             ) : !anprLoading && (
-              <ManualPlateEntry
-                result={result}
-                saving={saving}
-                onSave={savePlate}
-              />
+              <ManualPlateEntry result={result} saving={saving} onSave={savePlate} conducteurs={conducteurs} />
             )}
 
             <div style={{ marginTop: 12 }}>
-              <button className="btn btn-outline btn-sm" onClick={capture} disabled={loading}>
-                📸 Nouvelle capture
-              </button>
+              <button className="btn btn-outline btn-sm" onClick={capture} disabled={loading}>📸 Nouvelle capture</button>
             </div>
           </div>
         )}
@@ -183,27 +173,52 @@ function CaptureModal({ cameras, onClose, onSaved }) {
 export default function Vehicules() {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
-  const [form, setForm] = useState({ plaque: "", point_entree: "Principal", notes: "" });
+  const [form, setForm] = useState({ plaque: "", point_entree: "Principal", notes: "", conducteur_id: "" });
   const [showForm, setShowForm] = useState(false);
   const [showCapture, setShowCapture] = useState(false);
   const [cameras, setCameras] = useState([]);
+  const [conducteurs, setConducteurs] = useState([]);
   const [points] = useState(["Principal", "Entrée Nord", "Entrée Sud"]);
 
-  const load = () => api.get(`/api/vehicules?q=${q}&limit=300`).then(r => setRows(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+  const load = () =>
+    api.get(`/api/vehicules?q=${q}&limit=300`)
+      .then(r => setRows(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
+
+  const loadConducteurs = () =>
+    api.get("/api/conducteurs?limit=200")
+      .then(r => {
+        const all = Array.isArray(r.data) ? r.data : [];
+        setConducteurs(all.filter(c => !c.heure_sortie));
+      })
+      .catch(() => {});
 
   useEffect(() => { load(); }, [q]);
   useEffect(() => {
     api.get("/api/cameras").then(r => setCameras(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    loadConducteurs();
   }, []);
 
   const save = async (e) => {
     e.preventDefault();
     try {
-      const { data } = await api.post("/api/vehicules", form);
+      const payload = {
+        ...form,
+        conducteur_id: form.conducteur_id ? parseInt(form.conducteur_id) : null,
+      };
+      const { data } = await api.post("/api/vehicules", payload);
       if (data.blacklist) toast.error(`⚠️ Plaque ${form.plaque} en liste noire !`);
       else toast.success("Véhicule enregistré");
-      setForm({ plaque: "", point_entree: "Principal", notes: "" });
+      setForm({ plaque: "", point_entree: "Principal", notes: "", conducteur_id: "" });
       setShowForm(false);
+      load();
+    } catch (err) { toast.error(err.response?.data?.detail || "Erreur"); }
+  };
+
+  const sortie = async (id) => {
+    try {
+      await api.patch(`/api/vehicules/${id}/sortie`, { point_sortie: "Principal" });
+      toast.success("Sortie enregistrée");
       load();
     } catch (err) { toast.error(err.response?.data?.detail || "Erreur"); }
   };
@@ -216,17 +231,26 @@ export default function Vehicules() {
 
   const exportCsv = () => window.open("/export/vehicules");
 
+  const enCours = rows.filter(v => !v.heure_sortie).length;
+
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">🚗 Véhicules</h1>
+        <h1 className="page-title">🚗 Véhicules
+          {enCours > 0 && (
+            <span style={{ marginLeft: 10, fontSize: 13, fontWeight: 400, color: "#3fb950",
+              background: "rgba(63,185,80,0.12)", borderRadius: 12, padding: "2px 10px" }}>
+              {enCours} en cours
+            </span>
+          )}
+        </h1>
         <div style={{ display: "flex", gap: 8 }}>
           {cameras.length > 0 && (
-            <button className="btn btn-primary btn-sm" onClick={() => setShowCapture(true)}>
+            <button className="btn btn-primary btn-sm" onClick={() => { loadConducteurs(); setShowCapture(true); }}>
               📸 Capturer ANPR
             </button>
           )}
-          <button className="btn btn-success btn-sm" onClick={() => setShowForm(true)}>+ Ajouter</button>
+          <button className="btn btn-success btn-sm" onClick={() => { loadConducteurs(); setShowForm(true); }}>+ Ajouter</button>
           <button className="btn btn-outline btn-sm" onClick={exportCsv}>⬇ CSV</button>
         </div>
       </div>
@@ -238,11 +262,9 @@ export default function Vehicules() {
       </div>
 
       {showCapture && cameras.length > 0 && (
-        <CaptureModal
-          cameras={cameras}
+        <CaptureModal cameras={cameras} conducteurs={conducteurs}
           onClose={() => setShowCapture(false)}
-          onSaved={() => { load(); }}
-        />
+          onSaved={() => { load(); }} />
       )}
 
       {showForm && (
@@ -263,6 +285,10 @@ export default function Vehicules() {
                 </select>
               </div>
               <div className="form-group">
+                <label>Conducteur</label>
+                <ConducteurSelect value={form.conducteur_id} onChange={v => setForm({ ...form, conducteur_id: v })} conducteurs={conducteurs} />
+              </div>
+              <div className="form-group">
                 <label>Notes</label>
                 <input className="form-control" value={form.notes}
                   onChange={e => setForm({ ...form, notes: e.target.value })} />
@@ -281,30 +307,56 @@ export default function Vehicules() {
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>Plaque</th><th>Confiance</th><th>Entrée</th><th>Date/Heure</th><th>Notes</th><th></th>
+                <th>Statut</th>
+                <th>Plaque</th>
+                <th>Conducteur</th>
+                <th>Confiance</th>
+                <th>Point Entrée</th>
+                <th>Heure Entrée</th>
+                <th>Point Sortie</th>
+                <th>Heure Sortie</th>
+                <th>Notes</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {rows.map(v => (
                 <tr key={v.id}>
-                  <td style={{ color: "var(--muted)" }}>{v.id}</td>
-                  <td><span className="badge badge-primary">{v.plaque}</span></td>
                   <td>
-                    {v.confidence ? (
-                      <span style={{
-                        color: v.confidence > 0.8 ? "#3fb950" : v.confidence > 0.5 ? "#e3b341" : "#f85149"
-                      }}>
-                        {(v.confidence * 100).toFixed(0)}%
-                      </span>
-                    ) : "—"}
+                    {v.heure_sortie
+                      ? <span className="badge" style={{ background: "var(--surface2)", color: "var(--muted)" }}>Sorti</span>
+                      : <span className="badge badge-success">En cours</span>}
                   </td>
-                  <td>{v.point_entree}</td>
-                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{v.timestamp?.slice(0, 16)}</td>
+                  <td><span className="badge badge-primary">{v.plaque}</span></td>
+                  <td style={{ fontSize: 13 }}>
+                    {v.conducteur_nom
+                      ? `${v.conducteur_nom}${v.conducteur_prenom ? " " + v.conducteur_prenom : ""}`
+                      : <span style={{ color: "var(--muted)" }}>—</span>}
+                  </td>
+                  <td>
+                    {v.confidence != null
+                      ? <span style={{ color: v.confidence > 0.8 ? "#3fb950" : v.confidence > 0.5 ? "#e3b341" : "#f85149" }}>
+                          {(v.confidence * 100).toFixed(0)}%
+                        </span>
+                      : "—"}
+                  </td>
+                  <td style={{ fontSize: 12 }}>{v.point_entree || "—"}</td>
+                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{v.timestamp?.slice(0, 16) || "—"}</td>
+                  <td style={{ fontSize: 12 }}>{v.point_sortie || "—"}</td>
+                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{v.heure_sortie?.slice(0, 16) || "—"}</td>
                   <td style={{ color: "var(--muted)", fontSize: 12 }}>{v.notes || "—"}</td>
-                  <td><button className="btn btn-icon btn-sm" onClick={() => del(v.id)}>🗑</button></td>
+                  <td style={{ display: "flex", gap: 4, flexWrap: "nowrap" }}>
+                    {!v.heure_sortie && (
+                      <button className="btn btn-sm" style={{ background: "#b62324", color: "#fff" }}
+                        onClick={() => sortie(v.id)}>
+                        Sortie
+                      </button>
+                    )}
+                    <button className="btn btn-icon btn-sm" onClick={() => del(v.id)}>🗑</button>
+                  </td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={7} className="empty">Aucun véhicule</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={10} className="empty">Aucun véhicule</td></tr>}
             </tbody>
           </table>
         </div>
