@@ -84,7 +84,8 @@ function CaptureModal({ cameras, conducteurs, onClose, onSaved }) {
         conducteur_id: cid ?? (condId ? parseInt(condId) : null),
       });
       if (data.blacklist) toast.error(`⚠️ Plaque ${plate} en liste noire !`);
-      else toast.success(`Plaque ${plate} enregistrée`);
+      else if (data.action === "SORTIE") toast.success(`🚗 SORTIE enregistrée — ${plate}`, { duration: 5000 });
+      else toast.success(`🟢 ENTRÉE enregistrée — ${plate}`, { duration: 5000 });
       onSaved();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Erreur");
@@ -208,7 +209,8 @@ export default function Vehicules() {
       };
       const { data } = await api.post("/api/vehicules", payload);
       if (data.blacklist) toast.error(`⚠️ Plaque ${form.plaque} en liste noire !`);
-      else toast.success("Véhicule enregistré");
+      else if (data.action === "SORTIE") toast.success(`🚗 SORTIE enregistrée — ${form.plaque}`, { duration: 5000 });
+      else toast.success(`🟢 ENTRÉE enregistrée — ${form.plaque}`, { duration: 5000 });
       setForm({ plaque: "", point_entree: "Principal", notes: "", conducteur_id: "" });
       setShowForm(false);
       load();
@@ -309,6 +311,7 @@ export default function Vehicules() {
               <tr>
                 <th>Statut</th>
                 <th>Plaque</th>
+                <th>Type</th>
                 <th>Conducteur</th>
                 <th>Confiance</th>
                 <th>Point Entrée</th>
@@ -328,6 +331,10 @@ export default function Vehicules() {
                       : <span className="badge badge-success">En cours</span>}
                   </td>
                   <td><span className="badge badge-primary">{v.plaque}</span></td>
+                  <td style={{ fontSize: 12, color: "var(--muted)" }}>
+                    {v.type_vehicule || <span style={{ color: "var(--muted)" }}>—</span>}
+                    {v.region_plaque && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.6 }}>[{v.region_plaque.toUpperCase()}]</span>}
+                  </td>
                   <td style={{ fontSize: 13 }}>
                     {v.conducteur_nom
                       ? `${v.conducteur_nom}${v.conducteur_prenom ? " " + v.conducteur_prenom : ""}`
@@ -356,7 +363,7 @@ export default function Vehicules() {
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={10} className="empty">Aucun véhicule</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={11} className="empty">Aucun véhicule</td></tr>}
             </tbody>
           </table>
         </div>

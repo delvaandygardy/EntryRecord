@@ -35,13 +35,32 @@ def list_vehicules(limit: int = 200, q: str = Query(""), conn=Depends(get_db), _
 @router.post("", status_code=201)
 def create_vehicule(body: VehiculeCreate, conn=Depends(get_db), user=Depends(require_write)):
     cur = conn.cursor()
-    cur.execute("SELECT motif, severite FROM blacklist_plaques WHERE plaque = %s AND actif = TRUE",
-                (body.plaque.upper().strip(),))
+    plaque = body.plaque.upper().strip()
+
+    cur.execute("SELECT motif, severite FROM blacklist_plaques WHERE plaque = %s AND actif = TRUE", (plaque,))
     bl = cur.fetchone()
     if bl:
-        _create_alerte(conn, "BLACKLIST_PLAQUE", body.plaque.upper(), f"Plaque en liste noire: {bl[0]}", bl[1])
+        _create_alerte(conn, "BLACKLIST_PLAQUE", plaque, f"Plaque en liste noire: {bl[0]}", bl[1])
 
-    # Auto-liaison : si aucun conducteur fourni, cherche un conducteur récent au même point
+    # Sortie automatique : si une entrée ouverte existe pour cette plaque → enregistrer la sortie
+    cur.execute("""
+        SELECT id FROM vehicules
+        WHERE plaque = %s AND heure_sortie IS NULL
+        ORDER BY timestamp DESC LIMIT 1
+    """, (plaque,))
+    open_entry = cur.fetchone()
+
+    if open_entry:
+        vid = open_entry[0]
+        cur.execute("""
+            UPDATE vehicules
+            SET heure_sortie = NOW(), point_sortie = %s
+            WHERE id = %s
+        """, (body.point_entree, vid))
+        conn.commit()
+        return {"id": vid, "action": "SORTIE", "blacklist": bl is not None, "conducteur_lie": False}
+
+    # Nouvelle entrée
     conducteur_id = body.conducteur_id
     if not conducteur_id:
         cur.execute("""
@@ -60,12 +79,13 @@ def create_vehicule(body: VehiculeCreate, conn=Depends(get_db), user=Depends(req
             conducteur_id = row[0]
 
     cur.execute("""
-        INSERT INTO vehicules (plaque, confidence, point_entree, notes, conducteur_id)
-        VALUES (%s, %s, %s, %s, %s) RETURNING id
-    """, (body.plaque.upper().strip(), body.confidence, body.point_entree, body.notes, conducteur_id))
+        INSERT INTO vehicules (plaque, confidence, point_entree, notes, conducteur_id, type_vehicule, region_plaque)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+    """, (plaque, body.confidence, body.point_entree, body.notes, conducteur_id,
+          body.type_vehicule, body.region_plaque))
     vid = cur.fetchone()[0]
     conn.commit()
-    return {"id": vid, "blacklist": bl is not None, "conducteur_lie": conducteur_id is not None}
+    return {"id": vid, "action": "ENTREE", "blacklist": bl is not None, "conducteur_lie": conducteur_id is not None}
 
 
 @router.patch("/{vid}/sortie")

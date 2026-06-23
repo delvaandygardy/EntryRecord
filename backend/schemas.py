@@ -38,6 +38,8 @@ class VehiculeCreate(BaseModel):
     point_entree: str = "Principal"
     notes: Optional[str] = None
     conducteur_id: Optional[int] = None
+    type_vehicule: Optional[str] = None
+    region_plaque: Optional[str] = None
 
 
 class PersonneCreate(BaseModel):

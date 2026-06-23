@@ -8,6 +8,7 @@ import cv2
 import requests
 import time
 import os
+import threading
 import logging
 from datetime import datetime, timedelta
 
@@ -31,14 +32,73 @@ BACKEND_URL     = os.getenv("BACKEND_URL",     "http://backend:8000")
 BACKEND_USER    = os.getenv("BACKEND_USER",    "admin")
 BACKEND_PASS    = os.getenv("BACKEND_PASS",    "Admin1234!")
 POINT_ENTREE    = os.getenv("POINT_ENTREE",    "Principal")
-DEDUP_MINUTES   = int(os.getenv("DEDUP_MINUTES",   "5"))
+DEDUP_MINUTES   = int(os.getenv("DEDUP_MINUTES",   "1"))
 MOTION_MIN      = int(os.getenv("MOTION_THRESHOLD", "400"))
-CHECK_INTERVAL  = float(os.getenv("CHECK_INTERVAL", "2.0"))  # secondes entre analyses
+CHECK_INTERVAL  = float(os.getenv("CHECK_INTERVAL", "0.05"))
 
 # Déduplication : plaque → dernière détection
 _seen: dict = {}
 _token: str | None = None
 _token_exp: datetime = datetime.min
+
+
+# ─── Thread de lecture RTSP ──────────────────────────────────────────────────
+
+class FrameGrabber(threading.Thread):
+    """
+    Lit le flux RTSP en continu dans un thread dédié.
+    Sans ce thread, le buffer OpenCV s'accumule pendant les appels API
+    (jusqu'à 15 s) et on finit par analyser des images périmées.
+    """
+    def __init__(self, url: str):
+        super().__init__(daemon=True)
+        self.url = url
+        self._frame = None
+        self._lock = threading.Lock()
+        self.alive = False
+        self._stop_evt = threading.Event()
+
+    def run(self):
+        cap = _open_rtsp(self.url)
+        if not cap.isOpened():
+            log.error("FrameGrabber : impossible d'ouvrir le flux")
+            return
+        self.alive = True
+        while not self._stop_evt.is_set():
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                self.alive = False
+                break
+            with self._lock:
+                self._frame = frame
+        cap.release()
+        self.alive = False
+
+    def read(self):
+        """Retourne la frame la plus récente."""
+        with self._lock:
+            if self._frame is None:
+                return False, None
+            return True, self._frame.copy()
+
+    def stop(self):
+        self._stop_evt.set()
+
+
+def _open_rtsp(url: str):
+    """Ouvre le flux RTSP avec les options FFmpeg basse-latence."""
+    cap = cv2.VideoCapture()
+    # Options pour minimiser la mise en tampon côté FFmpeg
+    cap.open(
+        url,
+        cv2.CAP_FFMPEG,
+        [
+            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000,
+            cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000,
+        ],
+    )
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    return cap
 
 
 # ─── Auth backend ────────────────────────────────────────────────────────────
@@ -72,19 +132,19 @@ def _token_ok() -> str | None:
 # ─── Plate Recognizer API ────────────────────────────────────────────────────
 
 def recognize(frame) -> list:
-    """Envoie la frame à l'API, retourne [(plaque, score), ...]."""
+    """Envoie la frame à l'API, retourne [(plaque, score, type_vehicule, region), ...]."""
     if not PR_TOKEN:
         log.error("PLATERECOGNIZER_TOKEN non défini — arrêt de la reconnaissance")
         return []
     try:
-        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
+        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
         if not ok:
             return []
         r = requests.post(
             "https://api.platerecognizer.com/v1/plate-reader/",
             headers={"Authorization": f"Token {PR_TOKEN}"},
             files={"upload": ("f.jpg", buf.tobytes(), "image/jpeg")},
-            data={"regions": ""},   # laisser vide = détection globale
+            data={"regions": ""},
             timeout=15,
         )
         if r.status_code == 429:
@@ -93,11 +153,15 @@ def recognize(frame) -> list:
         if r.status_code not in (200, 201):
             log.warning(f"API HTTP {r.status_code}: {r.text[:80]}")
             return []
-        return [
-            (res["plate"].upper().strip(), float(res.get("score", 1.0)))
-            for res in r.json().get("results", [])
-            if res.get("plate") and len(res["plate"].strip()) >= 2
-        ]
+        results = []
+        for res in r.json().get("results", []):
+            plate = res.get("plate", "").strip()
+            if not plate or len(plate) < 2:
+                continue
+            type_v = res.get("vehicle", {}).get("type")
+            region = res.get("region", {}).get("code")
+            results.append((plate.upper(), float(res.get("score", 1.0)), type_v, region))
+        return results
     except Exception as e:
         log.error(f"recognize(): {e}")
         return []
@@ -105,30 +169,37 @@ def recognize(frame) -> list:
 
 # ─── Backend save ────────────────────────────────────────────────────────────
 
-def save_plate(plaque: str, confidence: float) -> bool:
+def save_plate(plaque: str, confidence: float,
+               type_vehicule: str | None = None,
+               region_plaque: str | None = None) -> tuple[bool, str]:
+    """Retourne (succès, action) où action = 'ENTREE' | 'SORTIE'."""
     token = _token_ok()
     if not token:
-        return False
+        return False, ""
     body = {
         "plaque": plaque,
         "confidence": round(confidence, 3),
         "point_entree": POINT_ENTREE,
         "notes": "ANPR auto",
+        "type_vehicule": type_vehicule,
+        "region_plaque": region_plaque,
     }
     headers = {"Authorization": f"Bearer {token}"}
     try:
         r = requests.post(f"{BACKEND_URL}/api/vehicules",
                           json=body, headers=headers, timeout=10)
         if r.status_code == 401:
-            # Token expiré — renouveler et réessayer
             _login()
             headers["Authorization"] = f"Bearer {_token}"
             r = requests.post(f"{BACKEND_URL}/api/vehicules",
                               json=body, headers=headers, timeout=10)
-        return r.status_code == 201
+        if r.status_code == 201:
+            action = r.json().get("action", "ENTREE")
+            return True, action
+        return False, ""
     except Exception as e:
         log.error(f"save_plate(): {e}")
-        return False
+        return False, ""
 
 
 # ─── Détection de mouvement ──────────────────────────────────────────────────
@@ -143,12 +214,6 @@ def motion_score(prev_gray, curr_gray) -> int:
 
 # ─── Boucle principale ───────────────────────────────────────────────────────
 
-def open_rtsp(url: str):
-    cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    return cap
-
-
 def main():
     log.info("=== ANPR Worker démarrage ===")
     log.info(f"Caméra  : {RTSP_URL}")
@@ -156,7 +221,6 @@ def main():
     log.info(f"Dédup   : {DEDUP_MINUTES} min   Mouvement : >{MOTION_MIN}px")
     log.info(f"API     : {'PRÊTE' if PR_TOKEN else 'TOKEN MANQUANT !'}")
 
-    # Attendre le backend au démarrage
     log.info("Attente du backend...")
     for _ in range(24):
         try:
@@ -169,37 +233,34 @@ def main():
     _login()
 
     while True:
-        log.info("Connexion caméra...")
-        cap = open_rtsp(RTSP_URL)
+        log.info("Connexion caméra (thread dédié)...")
+        grabber = FrameGrabber(RTSP_URL)
+        grabber.start()
 
-        if not cap.isOpened():
+        # Laisser le thread démarrer et vérifier la connexion
+        time.sleep(2)
+        if not grabber.alive:
             log.error("Impossible d'ouvrir le flux. Nouvelle tentative dans 15 s...")
+            grabber.stop()
             time.sleep(15)
             continue
 
         log.info("Caméra connectée")
         prev_gray = None
         last_check = datetime.min
-        consecutive_errors = 0
 
-        while True:
-            ret, frame = cap.read()
-            if not ret or frame is None:
-                consecutive_errors += 1
-                if consecutive_errors > 5:
-                    log.warning("Flux perdu — reconnexion...")
-                    break
-                time.sleep(1)
-                continue
-            consecutive_errors = 0
+        while grabber.alive:
+            time.sleep(0.05)  # 50 ms — polling léger, le grabber lit en arrière-plan
 
             now = datetime.now()
             if (now - last_check).total_seconds() < CHECK_INTERVAL:
-                time.sleep(0.1)
                 continue
             last_check = now
 
-            # Réduire pour la détection de mouvement
+            ret, frame = grabber.read()
+            if not ret or frame is None:
+                continue
+
             small = cv2.resize(frame, (640, 360))
             gray  = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
             gray  = cv2.GaussianBlur(gray, (21, 21), 0)
@@ -212,26 +273,33 @@ def main():
             prev_gray = gray
 
             if score < MOTION_MIN:
-                continue  # pas de mouvement significatif
+                continue
 
             log.info(f"Mouvement détecté ({score}px) → ANPR...")
+            # L'appel API peut prendre plusieurs secondes ;
+            # pendant ce temps le FrameGrabber continue de lire le flux.
             plates = recognize(frame)
 
             if not plates:
                 log.info("Aucune plaque détectée")
                 continue
 
-            for plaque, conf in plates:
+            for plaque, conf, type_v, region in plates:
                 last_seen = _seen.get(plaque)
                 if last_seen and now - last_seen < timedelta(minutes=DEDUP_MINUTES):
                     log.info(f"Doublon ignoré : {plaque} (vu il y a {int((now-last_seen).total_seconds())}s)")
                     continue
 
                 _seen[plaque] = now
-                ok = save_plate(plaque, conf)
-                log.info(f"{'✓ Sauvegardé' if ok else '✗ Échec sauvegarde'} : {plaque} ({conf:.0%})")
+                ok, action = save_plate(plaque, conf, type_v, region)
+                if ok:
+                    icon = "✓ ENTRÉE" if action == "ENTREE" else "✓ SORTIE"
+                    log.info(f"{icon} : {plaque} ({conf:.0%}){' [' + type_v + ']' if type_v else ''}")
+                else:
+                    log.info(f"✗ Échec sauvegarde : {plaque} ({conf:.0%})")
 
-        cap.release()
+        log.warning("Flux perdu — reconnexion dans 5 s...")
+        grabber.stop()
         time.sleep(5)
 
 
