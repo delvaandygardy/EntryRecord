@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
 import { usePoints } from "../hooks/usePoints";
+import { fmtDate } from "../utils/fmt";
 
 const COLOR_MAP = {
   rouge: "#c0392b", bleu: "#2980b9", blanc: "#ecf0f1", noir: "#1a1a1a",
@@ -207,6 +208,23 @@ export default function Vehicules() {
     loadConducteurs();
   }, []);
 
+  // WebSocket — rechargement instantané dès qu'un véhicule entre ou sort
+  useEffect(() => {
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${window.location.host}/ws/alertes`);
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "vehicule") {
+          load();
+          const icon = msg.action === "SORTIE" ? "🚗 SORTIE" : "🟢 ENTRÉE";
+          toast(`${icon} — ${msg.plaque}`, { duration: 4000 });
+        }
+      } catch (_) {}
+    };
+    return () => ws.close();
+  }, []);
+
   const save = async (e) => {
     e.preventDefault();
     try {
@@ -368,9 +386,9 @@ export default function Vehicules() {
                       : "—"}
                   </td>
                   <td style={{ fontSize: 12 }}>{v.point_entree || "—"}</td>
-                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{v.timestamp?.slice(0, 16) || "—"}</td>
+                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{fmtDate(v.timestamp)}</td>
                   <td style={{ fontSize: 12 }}>{v.point_sortie || "—"}</td>
-                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{v.heure_sortie?.slice(0, 16) || "—"}</td>
+                  <td style={{ color: "var(--muted)", fontSize: 12 }}>{fmtDate(v.heure_sortie)}</td>
                   <td style={{ color: "var(--muted)", fontSize: 12 }}>{v.notes || "—"}</td>
                   <td style={{ display: "flex", gap: 4, flexWrap: "nowrap" }}>
                     {!v.heure_sortie && (

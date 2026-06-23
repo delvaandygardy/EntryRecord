@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import api from "../api";
+import { fmtDate } from "../utils/fmt";
 
 function LivePulse() {
   return (
@@ -169,7 +170,7 @@ export default function Dashboard() {
                     <tr key={a.id}>
                       <td><span className="badge badge-danger">{a.type}</span></td>
                       <td style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.message}</td>
-                      <td style={{ color: "var(--muted)", fontSize: 11 }}>{a.timestamp?.slice(0, 16)}</td>
+                      <td style={{ color: "var(--muted)", fontSize: 11 }}>{fmtDate(a.timestamp)}</td>
                     </tr>
                   ))}
                 </tbody></table>
@@ -211,7 +212,7 @@ export default function Dashboard() {
                   <td>{v.point_entree}</td>
                   <td style={{ color: "var(--muted)", fontSize: 12 }}>{v.notes || "—"}</td>
                   <td style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>
-                    {v.timestamp?.slice(0, 16)}
+                    {fmtDate(v.timestamp)}
                   </td>
                 </tr>
               ))}

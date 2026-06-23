@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
+import { fmtDate } from "../utils/fmt";
 
 export default function Alertes() {
   const [alertes, setAlertes] = useState([]);
@@ -70,7 +71,7 @@ export default function Alertes() {
                   </td>
                   <td><code style={{ fontSize:12 }}>{a.reference || "—"}</code></td>
                   <td><span className={`badge ${sevClass(a.severite)}`}>{a.severite}</span></td>
-                  <td style={{ color:"var(--muted)", fontSize:12 }}>{a.timestamp?.slice(0,16)}</td>
+                  <td style={{ color:"var(--muted)", fontSize:12 }}>{fmtDate(a.timestamp)}</td>
                   <td style={{ display:"flex", gap:4 }}>
                     {!a.traitee && (
                       <button className="btn btn-success btn-sm" onClick={() => traiter(a.id)}>✓ Traiter</button>

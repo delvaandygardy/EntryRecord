@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from backend.deps import get_db, get_current_user, require_write
 from backend.schemas import VehiculeCreate
+from backend.ws_manager import manager
 import psycopg2.extras
 from datetime import datetime
 
@@ -33,7 +34,7 @@ def list_vehicules(limit: int = 200, q: str = Query(""), conn=Depends(get_db), _
 
 
 @router.post("", status_code=201)
-def create_vehicule(body: VehiculeCreate, conn=Depends(get_db), user=Depends(require_write)):
+async def create_vehicule(body: VehiculeCreate, conn=Depends(get_db), user=Depends(require_write)):
     cur = conn.cursor()
     plaque = body.plaque.upper().strip()
 
@@ -58,6 +59,7 @@ def create_vehicule(body: VehiculeCreate, conn=Depends(get_db), user=Depends(req
             WHERE id = %s
         """, (body.point_entree, vid))
         conn.commit()
+        await manager.broadcast({"type": "vehicule", "action": "SORTIE", "plaque": plaque})
         return {"id": vid, "action": "SORTIE", "blacklist": bl is not None, "conducteur_lie": False}
 
     # Nouvelle entrée
@@ -85,6 +87,7 @@ def create_vehicule(body: VehiculeCreate, conn=Depends(get_db), user=Depends(req
           body.type_vehicule, body.region_plaque, body.couleur_vehicule))
     vid = cur.fetchone()[0]
     conn.commit()
+    await manager.broadcast({"type": "vehicule", "action": "ENTREE", "plaque": plaque})
     return {"id": vid, "action": "ENTREE", "blacklist": bl is not None, "conducteur_lie": conducteur_id is not None}
 
 

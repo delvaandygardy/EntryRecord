@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
+import { fmtDate } from "../utils/fmt";
 
 const BLANK = { username:"", email:"", password:"", nom:"", prenom:"", role_id:3 };
 
@@ -96,7 +97,7 @@ export default function Admin() {
                   <td style={{ color:"var(--muted)", fontSize:12 }}>{u.email||"—"}</td>
                   <td><span className={`badge ${roleBadge(u.role_nom)}`}>{u.role_nom}</span></td>
                   <td><span className={`badge ${u.actif?"badge-success":"badge-muted"}`}>{u.actif?"Actif":"Inactif"}</span></td>
-                  <td style={{ color:"var(--muted)", fontSize:12 }}>{u.derniere_connexion?.slice(0,16)||"—"}</td>
+                  <td style={{ color:"var(--muted)", fontSize:12 }}>{fmtDate(u.derniere_connexion)}</td>
                   <td style={{ display:"flex", gap:4 }}>
                     <button className="btn btn-icon btn-sm" onClick={() => openEdit(u)}>✏️</button>
                     <button className="btn btn-icon btn-sm" onClick={() => del(u.id)}>🗑</button>

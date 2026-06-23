@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import api from "../api";
+import { nowTZ, nowDateTZ } from "../utils/fmt";
 
 const NAV = [
   { path: "/",          label: "Tableau de Bord", icon: "⬛" },
@@ -24,7 +25,7 @@ export default function Sidebar() {
   let user = {};
   try { user = JSON.parse(localStorage.getItem("user") || "{}"); } catch (_) {}
   const [alertCount, setAlertCount] = useState(0);
-  const [now, setNow] = useState(new Date());
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     const fetchAlerts = () =>
@@ -35,7 +36,7 @@ export default function Sidebar() {
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
+    const t = setInterval(() => setTick(n => n + 1), 1000);
     return () => clearInterval(t);
   }, []);
 
@@ -66,8 +67,8 @@ export default function Sidebar() {
       </div>
       <div className="sidebar-footer">
         <div style={{ marginBottom: 8 }}>
-          {now.toLocaleTimeString("fr")}<br />
-          <span style={{ color: "var(--muted)" }}>{now.toLocaleDateString("fr")}</span>
+          {nowTZ()}<br />
+          <span style={{ color: "var(--muted)" }}>{nowDateTZ()}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>👤 {user.username || "—"}</span>

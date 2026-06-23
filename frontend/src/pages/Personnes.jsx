@@ -3,6 +3,7 @@ import api from "../api";
 import toast from "react-hot-toast";
 import DocumentScanner from "../components/DocumentScanner";
 import { usePoints } from "../hooks/usePoints";
+import { fmtDate } from "../utils/fmt";
 
 function QRModal({ person, type, onClose }) {
   const [src, setSrc] = useState(null);
@@ -186,11 +187,11 @@ export default function Personnes({ mode }) {
                       </span>
                     </td>
                     <td style={{ color:"var(--muted)", fontSize:12 }}>{r.point_entree||"—"}</td>
-                    <td style={{ color:"var(--muted)", fontSize:12 }}>{r.timestamp?.slice(0,16)||"—"}</td>
+                    <td style={{ color:"var(--muted)", fontSize:12 }}>{fmtDate(r.timestamp)}</td>
                     <td style={{ color:"var(--muted)", fontSize:12 }}>{r.point_sortie||"—"}</td>
                     <td style={{ fontSize:12 }}>
                       {r.heure_sortie
-                        ? <span style={{ color:"var(--muted)" }}>{r.heure_sortie.slice(0,16)}</span>
+                        ? <span style={{ color:"var(--muted)" }}>{fmtDate(r.heure_sortie)}</span>
                         : <button className="btn btn-sm" style={{ background:"#e53e3e", color:"#fff", padding:"2px 8px" }}
                             onClick={() => sortie(r.id)}>Sortie</button>
                       }
