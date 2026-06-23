@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
+import { usePoints } from "../hooks/usePoints";
 
 const COLOR_MAP = {
   rouge: "#c0392b", bleu: "#2980b9", blanc: "#ecf0f1", noir: "#1a1a1a",
@@ -185,7 +186,7 @@ export default function Vehicules() {
   const [showCapture, setShowCapture] = useState(false);
   const [cameras, setCameras] = useState([]);
   const [conducteurs, setConducteurs] = useState([]);
-  const [points] = useState(["Principal", "Entrée Nord", "Entrée Sud"]);
+  const points = usePoints();
 
   const load = () =>
     api.get(`/api/vehicules?q=${q}&limit=300`)

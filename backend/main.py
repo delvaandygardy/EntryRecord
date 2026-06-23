@@ -55,7 +55,8 @@ class _CamWorker:
 _cam_workers: dict[int, _CamWorker] = {}
 
 from backend.routers import (auth_router, vehicules, personnes, employes,
-                              blacklist, alertes, cameras, reports, admin, scanner)
+                              blacklist, alertes, cameras, reports, admin, scanner,
+                              points_acces)
 
 app = FastAPI(title="Système d'Enregistrement Automatique", version="2.0")
 
@@ -77,6 +78,7 @@ app.include_router(cameras.router)
 app.include_router(reports.router)
 app.include_router(admin.router)
 app.include_router(scanner.router)
+app.include_router(points_acces.router)
 
 # Run DB migrations on startup
 @app.on_event("startup")
@@ -90,6 +92,19 @@ def startup():
     migration_sql = Path(__file__).parent.parent / "database" / "migrations" / "v2_new_features.sql"
     with open(migration_sql) as f:
         conn.cursor().execute(f.read())
+    conn.commit()
+    # Table points d'accès
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS points_acces (
+            id   SERIAL PRIMARY KEY,
+            nom  TEXT UNIQUE NOT NULL,
+            actif BOOLEAN DEFAULT TRUE
+        );
+        INSERT INTO points_acces (nom) VALUES
+            ('Principal'), ('Entrée Nord'), ('Entrée Sud')
+        ON CONFLICT (nom) DO NOTHING;
+    """)
     conn.commit()
     conn.close()
     print("✓ Base de données initialisée")

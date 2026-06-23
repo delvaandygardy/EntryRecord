@@ -22,10 +22,13 @@ logging.basicConfig(
 )
 log = logging.getLogger("anpr")
 
-# Correctif DNS pour QNAP (127.0.0.11 → 10.0.5.1 ne résout pas l'internet)
+# Correctif DNS pour QNAP : ajoute 8.8.8.8 APRÈS le DNS Docker interne (127.0.0.11)
+# pour que les noms de containers ET les domaines externes fonctionnent
 try:
-    with open("/etc/resolv.conf", "w") as f:
-        f.write("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+    current = open("/etc/resolv.conf").read()
+    if "8.8.8.8" not in current:
+        with open("/etc/resolv.conf", "a") as f:
+            f.write("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
 except Exception:
     pass
 

@@ -12,9 +12,10 @@ const NAV = [
   { path: "/presences", label: "Présences",         icon: "📋" },
   { path: "/blacklist", label: "Liste Noire",       icon: "🚫" },
   { path: "/alertes",   label: "Alertes",           icon: "🔔", alert: true },
-  { path: "/cameras",   label: "Caméras IP",        icon: "📷" },
-  { path: "/rapports",  label: "Rapports",          icon: "📊" },
-  { path: "/admin",     label: "Administration",    icon: "⚙️" },
+  { path: "/cameras",       label: "Caméras IP",        icon: "📷" },
+  { path: "/points_acces",  label: "Points d'Accès",   icon: "🚪" },
+  { path: "/rapports",      label: "Rapports",          icon: "📊" },
+  { path: "/admin",         label: "Administration",    icon: "⚙️" },
 ];
 
 export default function Sidebar() {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
 import Hls from "hls.js";
+import { usePoints } from "../hooks/usePoints";
 
 function LiveFeed({ cam, onClose }) {
   const videoRef = useRef(null);
@@ -66,6 +67,7 @@ function LiveFeed({ cam, onClose }) {
 }
 
 export default function Cameras() {
+  const points = usePoints();
   const [cams, setCams] = useState([]);
   const [form, setForm] = useState({ nom: "", url_rtsp: "", point_entree: "Principal", actif: true });
   const [showForm, setShowForm] = useState(false);
@@ -127,9 +129,7 @@ export default function Cameras() {
               <div className="form-group"><label>Point d'entrée</label>
                 <select className="form-select" value={form.point_entree}
                   onChange={e => setForm({...form, point_entree: e.target.value})}>
-                  <option>Principal</option>
-                  <option>Entrée Nord</option>
-                  <option>Entrée Sud</option>
+                  {points.map(p => <option key={p}>{p}</option>)}
                 </select></div>
               <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
                 <button type="button" className="btn btn-outline" onClick={() => setShowForm(false)}>Annuler</button>

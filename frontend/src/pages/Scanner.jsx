@@ -1,13 +1,14 @@
 import { useRef, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
+import { usePoints } from "../hooks/usePoints";
 
 const CATS = { employe: "Employé", conducteur: "Conducteur", pieton: "Piéton" };
 const CAT_COLOR = { employe: "var(--primary)", conducteur: "var(--warning)", pieton: "#8b5cf6" };
-const POINTS = ["Principal", "Entrée Nord", "Entrée Sud"];
 
 export default function Scanner() {
   const inputRef = useRef(null);
+  const points = usePoints();
   const [code, setCode] = useState("");
   const [point, setPoint] = useState("Principal");
   const [result, setResult] = useState(null);
@@ -60,7 +61,7 @@ export default function Scanner() {
                   <label style={{ fontSize: 12, color: "var(--muted)" }}>Point d'entrée</label>
                   <select className="form-select" value={point}
                     onChange={e => setPoint(e.target.value)}>
-                    {POINTS.map(p => <option key={p}>{p}</option>)}
+                    {points.map(p => <option key={p}>{p}</option>)}
                   </select>
                 </div>
                 <div className="form-group" style={{ marginTop: 12 }}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
 import DocumentScanner from "../components/DocumentScanner";
+import { usePoints } from "../hooks/usePoints";
 
 function QRModal({ person, type, onClose }) {
   const [src, setSrc] = useState(null);
@@ -46,6 +47,7 @@ export default function Personnes({ mode }) {
   const isConducteur = mode === "conducteur";
   const title = isConducteur ? "🪪 Conducteurs" : "🚶 Piétons";
   const endpoint = isConducteur ? "/api/conducteurs" : "/api/pietons";
+  const points = usePoints();
 
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
@@ -142,7 +144,7 @@ export default function Personnes({ mode }) {
                   <input className="form-control" value={form.date_expiration} onChange={e => setForm({...form,date_expiration:e.target.value})} /></div>
                 <div className="form-group"><label>Point d'entrée</label>
                   <select className="form-select" value={form.point_entree} onChange={e => setForm({...form,point_entree:e.target.value})}>
-                    <option>Principal</option><option>Entrée Nord</option><option>Entrée Sud</option>
+                    {points.map(p => <option key={p}>{p}</option>)}
                   </select></div>
               </div>
               <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
