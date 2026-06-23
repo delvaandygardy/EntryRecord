@@ -40,6 +40,7 @@ class VehiculeCreate(BaseModel):
     conducteur_id: Optional[int] = None
     type_vehicule: Optional[str] = None
     region_plaque: Optional[str] = None
+    couleur_vehicule: Optional[str] = None
 
 
 class PersonneCreate(BaseModel):

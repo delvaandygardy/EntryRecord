@@ -79,10 +79,10 @@ def create_vehicule(body: VehiculeCreate, conn=Depends(get_db), user=Depends(req
             conducteur_id = row[0]
 
     cur.execute("""
-        INSERT INTO vehicules (plaque, confidence, point_entree, notes, conducteur_id, type_vehicule, region_plaque)
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+        INSERT INTO vehicules (plaque, confidence, point_entree, notes, conducteur_id, type_vehicule, region_plaque, couleur_vehicule)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
     """, (plaque, body.confidence, body.point_entree, body.notes, conducteur_id,
-          body.type_vehicule, body.region_plaque))
+          body.type_vehicule, body.region_plaque, body.couleur_vehicule))
     vid = cur.fetchone()[0]
     conn.commit()
     return {"id": vid, "action": "ENTREE", "blacklist": bl is not None, "conducteur_lie": conducteur_id is not None}

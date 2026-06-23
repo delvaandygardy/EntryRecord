@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import api from "../api";
 import toast from "react-hot-toast";
 
+const COLOR_MAP = {
+  rouge: "#c0392b", bleu: "#2980b9", blanc: "#ecf0f1", noir: "#1a1a1a",
+  gris: "#7f8c8d", argent: "#bdc3c7", vert: "#27ae60", jaune: "#f1c40f",
+  orange: "#e67e22", marron: "#795548", beige: "#d4b896", violet: "#8e44ad",
+};
+
 function ConducteurSelect({ value, onChange, conducteurs }) {
   return (
     <select className="form-select" value={value} onChange={e => onChange(e.target.value)}>
@@ -312,6 +318,7 @@ export default function Vehicules() {
                 <th>Statut</th>
                 <th>Plaque</th>
                 <th>Type</th>
+                <th>Couleur</th>
                 <th>Conducteur</th>
                 <th>Confiance</th>
                 <th>Point Entrée</th>
@@ -334,6 +341,18 @@ export default function Vehicules() {
                   <td style={{ fontSize: 12, color: "var(--muted)" }}>
                     {v.type_vehicule || <span style={{ color: "var(--muted)" }}>—</span>}
                     {v.region_plaque && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.6 }}>[{v.region_plaque.toUpperCase()}]</span>}
+                  </td>
+                  <td style={{ fontSize: 12 }}>
+                    {v.couleur_vehicule
+                      ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                          <span style={{
+                            width: 12, height: 12, borderRadius: "50%", display: "inline-block",
+                            background: COLOR_MAP[v.couleur_vehicule] || "#888",
+                            border: "1px solid rgba(255,255,255,0.2)",
+                          }} />
+                          {v.couleur_vehicule}
+                        </span>
+                      : <span style={{ color: "var(--muted)" }}>—</span>}
                   </td>
                   <td style={{ fontSize: 13 }}>
                     {v.conducteur_nom
@@ -363,7 +382,7 @@ export default function Vehicules() {
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={11} className="empty">Aucun véhicule</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={12} className="empty">Aucun véhicule</td></tr>}
             </tbody>
           </table>
         </div>

@@ -10,7 +10,10 @@ import time
 import os
 import threading
 import logging
+import base64
 from datetime import datetime, timedelta
+
+import anthropic
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,6 +38,7 @@ POINT_ENTREE    = os.getenv("POINT_ENTREE",    "Principal")
 DEDUP_MINUTES   = int(os.getenv("DEDUP_MINUTES",   "1"))
 MOTION_MIN      = int(os.getenv("MOTION_THRESHOLD", "400"))
 CHECK_INTERVAL  = float(os.getenv("CHECK_INTERVAL", "0.05"))
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 # Déduplication : plaque → dernière détection
 _seen: dict = {}
@@ -129,6 +133,47 @@ def _token_ok() -> str | None:
     return _token
 
 
+# ─── Claude vision — couleur véhicule ───────────────────────────────────────
+
+def describe_vehicle(frame) -> str | None:
+    """Envoie la frame à Claude Opus pour identifier la couleur dominante du véhicule."""
+    if not ANTHROPIC_API_KEY:
+        return None
+    try:
+        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if not ok:
+            return None
+        img_b64 = base64.standard_b64encode(buf.tobytes()).decode("utf-8")
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model="claude-opus-4-8",
+            max_tokens=50,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64},
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "Identifie la couleur principale de ce véhicule. "
+                            "Réponds avec un seul mot en français "
+                            "(ex: rouge, bleu, blanc, noir, gris, argent, vert, jaune, orange, marron, beige). "
+                            "Si aucun véhicule n'est visible, réponds 'inconnu'."
+                        ),
+                    },
+                ],
+            }],
+        )
+        couleur = response.content[0].text.strip().lower()
+        return couleur if len(couleur) <= 20 else None
+    except Exception as e:
+        log.warning(f"describe_vehicle(): {e}")
+        return None
+
+
 # ─── Plate Recognizer API ────────────────────────────────────────────────────
 
 def recognize(frame) -> list:
@@ -171,7 +216,8 @@ def recognize(frame) -> list:
 
 def save_plate(plaque: str, confidence: float,
                type_vehicule: str | None = None,
-               region_plaque: str | None = None) -> tuple[bool, str]:
+               region_plaque: str | None = None,
+               couleur_vehicule: str | None = None) -> tuple[bool, str]:
     """Retourne (succès, action) où action = 'ENTREE' | 'SORTIE'."""
     token = _token_ok()
     if not token:
@@ -183,6 +229,7 @@ def save_plate(plaque: str, confidence: float,
         "notes": "ANPR auto",
         "type_vehicule": type_vehicule,
         "region_plaque": region_plaque,
+        "couleur_vehicule": couleur_vehicule,
     }
     headers = {"Authorization": f"Bearer {token}"}
     try:
@@ -284,6 +331,11 @@ def main():
                 log.info("Aucune plaque détectée")
                 continue
 
+            # Détection couleur une seule fois par événement de détection
+            couleur = describe_vehicle(frame)
+            if couleur:
+                log.info(f"Couleur détectée : {couleur}")
+
             for plaque, conf, type_v, region in plates:
                 last_seen = _seen.get(plaque)
                 if last_seen and now - last_seen < timedelta(minutes=DEDUP_MINUTES):
@@ -291,10 +343,12 @@ def main():
                     continue
 
                 _seen[plaque] = now
-                ok, action = save_plate(plaque, conf, type_v, region)
+                ok, action = save_plate(plaque, conf, type_v, region, couleur)
                 if ok:
                     icon = "✓ ENTRÉE" if action == "ENTREE" else "✓ SORTIE"
-                    log.info(f"{icon} : {plaque} ({conf:.0%}){' [' + type_v + ']' if type_v else ''}")
+                    extra = f"[{type_v}]" if type_v else ""
+                    extra += f" {couleur}" if couleur else ""
+                    log.info(f"{icon} : {plaque} ({conf:.0%}) {extra}".strip())
                 else:
                     log.info(f"✗ Échec sauvegarde : {plaque} ({conf:.0%})")
 
